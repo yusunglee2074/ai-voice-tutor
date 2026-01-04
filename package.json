@@ -1,0 +1,13 @@
+{
+  "name": "ringle-clone",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n \"SERVER,WEB\" -c \"magenta,cyan\" --timestamp-format \"HH:mm:ss\" \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "cd server && bin/rails s -p 3000",
+    "dev:web": "cd web && npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
