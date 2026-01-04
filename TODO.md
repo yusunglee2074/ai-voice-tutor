@@ -42,8 +42,8 @@
 - [x] `DELETE /api/v1/admin/users/:user_id/memberships/:id` - 멤버십 삭제
 
 ### 2.2 관리자 API 테스트 (RSpec)
-- [ ] 멤버십 유형 CRUD 테스트
-- [ ] 사용자 관리 API 테스트
+- [x] 멤버십 유형 CRUD 테스트
+- [x] 사용자 관리 API 테스트
 
 ### 2.3 관리자 UI (React) ✅
 - [x] `/admin` 라우팅 설정
@@ -54,8 +54,8 @@
 - [x] `/admin/users/:id` - 사용자 상세 (멤버십 부여/삭제)
 
 ### 2.4 관리자 UI 테스트 (Vitest)
-- [ ] 멤버십 유형 관리 컴포넌트 테스트
-- [ ] 사용자 관리 컴포넌트 테스트
+- [x] 멤버십 유형 관리 컴포넌트 테스트
+- [x] 사용자 관리 컴포넌트 테스트
 
 ---
 
@@ -77,34 +77,34 @@
 - [x] TanStack Query 설정 및 API 연동
 
 ### 3.4 사용자 UI 테스트 (Vitest)
-- [ ] 홈 페이지 컴포넌트 테스트
-- [ ] Route Guard 테스트
+- [x] 홈 페이지 컴포넌트 테스트
+- [x] Route Guard 테스트
 
 ---
 
-## Phase 4: 오디오 파이프라인 - 백엔드 (The Core - Backend)
+## Phase 4: 오디오 파이프라인 - 백엔드 (The Core - Backend) ✅
 
 ### 4.1 외부 API 연동 모듈
-- [ ] AssemblyAI STT Service (WebSocket 기반 실시간 스트리밍)
-- [ ] LLM Service (스트리밍 응답)
-- [ ] Cartesia TTS Service (WebSocket 기반, 24kHz PCM)
-- [ ] 각 서비스 추상화 (느슨한 결합)
+- [x] AssemblyAI STT Service (WebSocket 기반 실시간 스트리밍)
+- [x] LLM Service (스트리밍 응답)
+- [x] Cartesia TTS Service (WebSocket 기반, 24kHz PCM)
+- [x] 각 서비스 추상화 (느슨한 결합)
 
 ### 4.2 WebSocket 서버
-- [ ] WebSocket 엔드포인트 설정 (`/ws`)
-- [ ] 바이너리 오디오 수신 처리
-- [ ] JSON 이벤트 전송 (stt_chunk, stt_output, llm_chunk, tts_chunk)
+- [x] WebSocket 엔드포인트 설정 (`/ws`)
+- [x] 바이너리 오디오 수신 처리
+- [x] JSON 이벤트 전송 (stt_chunk, stt_output, llm_chunk, tts_chunk)
 
 ### 4.3 스트리밍 파이프라인
-- [ ] Producer-Consumer 패턴 구현
-- [ ] Async Generator 기반 데이터 흐름
-- [ ] Audio → STT → LLM → TTS → Client 파이프라인
+- [x] Producer-Consumer 패턴 구현
+- [x] Async Generator 기반 데이터 흐름
+- [x] Audio → STT → LLM → TTS → Client 파이프라인
 
 ### 4.4 대화 컨텍스트 관리
-- [ ] WebSocket 연결 직후 AI 초기 인사말(Greeting) 자동 전송 로직
-- [ ] 세션별 대화 히스토리 메모리 저장
-- [ ] LLM 요청 시 컨텍스트 주입
-- [ ] 세션 종료 시 메모리 정리
+- [x] WebSocket 연결 직후 AI 초기 인사말(Greeting) 자동 전송 로직
+- [x] 세션별 대화 히스토리 메모리 저장
+- [x] LLM 요청 시 컨텍스트 주입
+- [x] 세션 종료 시 메모리 정리
 
 ### 4.5 백엔드 오디오 테스트 (RSpec)
 - [ ] STT Service 테스트
@@ -114,39 +114,39 @@
 
 ---
 
-## Phase 5: 오디오 파이프라인 - 프론트엔드 (The Core - Frontend)
+## Phase 5: 오디오 파이프라인 - 프론트엔드 (The Core - Frontend) ✅
 
 ### 5.1 오디오 캡처 (AudioWorklet)
-- [ ] AudioWorklet Processor 구현
-- [ ] 48kHz → 16kHz 다운샘플링
-- [ ] 16-bit signed PCM, mono 변환
-- [ ] 100ms (1600 샘플) 청크 단위 처리
-- [ ] 마이크 설정 (echoCancellation, noiseSuppression, autoGainControl)
+- [x] AudioWorklet Processor 구현
+- [x] 48kHz → 16kHz 다운샘플링
+- [x] 16-bit signed PCM, mono 변환
+- [x] 100ms (1600 샘플) 청크 단위 처리
+- [x] 마이크 설정 (echoCancellation, noiseSuppression, autoGainControl)
 
 ### 5.2 WebSocket 클라이언트
-- [ ] WebSocket 연결 관리
-- [ ] 바이너리 오디오 청크 전송
-- [ ] JSON 이벤트 수신 및 처리
-- [ ] 연결 상태 관리 (연결/재연결/에러)
+- [x] WebSocket 연결 관리
+- [x] 바이너리 오디오 청크 전송
+- [x] JSON 이벤트 수신 및 처리
+- [x] 연결 상태 관리 (연결/재연결/에러)
 
 ### 5.3 오디오 재생 (Web Audio API)
-- [ ] Base64 → ArrayBuffer 디코딩
-- [ ] PCM Int16 → Float32 AudioBuffer 변환
-- [ ] 스케줄링 기반 끊김 없는 재생
-- [ ] 재생 큐 관리
+- [x] Base64 → ArrayBuffer 디코딩
+- [x] PCM Int16 → Float32 AudioBuffer 변환
+- [x] 스케줄링 기반 끊김 없는 재생
+- [x] 재생 큐 관리
 
 ### 5.4 대화 UI (`/conversation`)
-- [ ] 마이크 버튼 (녹음 시작/중지)
-- [ ] "답변 완료" 버튼 (STT 확정 → LLM 요청 트리거)
-- [ ] 음성 인식 중 파형 시각화
-- [ ] AI 응답 텍스트 표시 (스트리밍)
-- [ ] 상태 표시 (녹음 중, AI 생각 중, AI 말하는 중)
+- [x] 마이크 버튼 (녹음 시작/중지)
+- [x] "답변 완료" 버튼 (STT 확정 → LLM 요청 트리거)
+- [x] 음성 인식 중 파형 시각화
+- [x] AI 응답 텍스트 표시 (스트리밍)
+- [x] 상태 표시 (녹음 중, AI 생각 중, AI 말하는 중)
 
 ### 5.5 프론트엔드 오디오 테스트 (Vitest)
 - [ ] AudioWorklet 로직 테스트
 - [ ] WebSocket 클라이언트 테스트
 - [ ] 오디오 재생 로직 테스트
-- [ ] 대화 UI 컴포넌트 테스트
+- [x] 대화 UI 컴포넌트 테스트
 
 ---
 
