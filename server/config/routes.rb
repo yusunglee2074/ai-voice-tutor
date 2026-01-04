@@ -5,6 +5,10 @@ Rails.application.routes.draw do
 
   namespace :api do
     namespace :v1 do
+      # Mock Auth
+      post 'sessions', to: 'sessions#create'
+      get 'sessions/:id', to: 'sessions#show'
+
       # Public APIs
       resources :membership_types, only: [:index, :show]
       resources :users, only: [] do
