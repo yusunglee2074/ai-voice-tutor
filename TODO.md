@@ -2,21 +2,21 @@
 
 ---
 
-## Phase 1: 데이터베이스 및 모델 (Foundation)
+## Phase 1: 데이터베이스 및 모델 (Foundation) ✅
 
-### 1.1 DB 마이그레이션
+### 1.1 DB 마이그레이션 ✅
 - [x] `users` 테이블 생성 (id, email, name, timestamps)
 - [x] `membership_types` 테이블 생성 (id, name, features, duration_days, price, timestamps)
 - [x] `user_memberships` 테이블 생성 (id, user_id, membership_type_id, valid_from, valid_to, status, timestamps)
 - [x] 외래 키 및 인덱스 설정
 
-### 1.2 모델 구현
+### 1.2 모델 구현 ✅
 - [x] User 모델 (유효성 검사, 연관 관계)
 - [x] MembershipType 모델 (features JSON 처리)
 - [x] UserMembership 모델 (상태 관리, 만료 로직)
 - [x] 멤버십 만료 자동 처리 로직 (valid_to 기준 status → expired)
 
-### 1.3 Seed 데이터
+### 1.3 Seed 데이터 ✅
 - [x] 관리자 계정 (admin@example.com)
 - [x] 테스트용 멤버십 유형
 - [x] 테스트용 사용자
@@ -28,30 +28,30 @@
 
 ---
 
-## Phase 2: 관리자 기능 (Back Office)
+## Phase 2: 관리자 기능 (Back Office) ✅
 
-### 2.1 관리자 API (Rails)
-- [ ] `GET /api/v1/admin/membership_types` - 목록 조회
-- [ ] `POST /api/v1/admin/membership_types` - 생성
-- [ ] `PUT /api/v1/admin/membership_types/:id` - 수정
-- [ ] `DELETE /api/v1/admin/membership_types/:id` - 삭제
-- [ ] `GET /api/v1/admin/users` - 사용자 목록 (검색, 페이지네이션)
-- [ ] `GET /api/v1/admin/users/:user_id` - 사용자 상세
-- [ ] `GET /api/v1/admin/users/:user_id/memberships` - 사용자 멤버십 목록
-- [ ] `POST /api/v1/admin/users/:user_id/memberships` - 멤버십 부여
-- [ ] `DELETE /api/v1/admin/users/:user_id/memberships/:id` - 멤버십 삭제
+### 2.1 관리자 API (Rails) ✅
+- [x] `GET /api/v1/admin/membership_types` - 목록 조회
+- [x] `POST /api/v1/admin/membership_types` - 생성
+- [x] `PUT /api/v1/admin/membership_types/:id` - 수정
+- [x] `DELETE /api/v1/admin/membership_types/:id` - 삭제
+- [x] `GET /api/v1/admin/users` - 사용자 목록 (검색, 페이지네이션)
+- [x] `GET /api/v1/admin/users/:user_id` - 사용자 상세
+- [x] `GET /api/v1/admin/users/:user_id/memberships` - 사용자 멤버십 목록
+- [x] `POST /api/v1/admin/users/:user_id/memberships` - 멤버십 부여
+- [x] `DELETE /api/v1/admin/users/:user_id/memberships/:id` - 멤버십 삭제
 
 ### 2.2 관리자 API 테스트 (RSpec)
 - [ ] 멤버십 유형 CRUD 테스트
 - [ ] 사용자 관리 API 테스트
 
-### 2.3 관리자 UI (React)
-- [ ] `/admin` 라우팅 설정
-- [ ] 관리자 대시보드 페이지
-- [ ] `/admin/membership-types` - 멤버십 유형 목록 테이블
-- [ ] 멤버십 유형 생성/수정 모달
-- [ ] `/admin/users` - 사용자 검색 및 목록
-- [ ] `/admin/users/:id` - 사용자 상세 (멤버십 부여/삭제)
+### 2.3 관리자 UI (React) ✅
+- [x] `/admin` 라우팅 설정
+- [x] 관리자 대시보드 페이지
+- [x] `/admin/membership-types` - 멤버십 유형 목록 테이블
+- [x] 멤버십 유형 생성/수정 모달
+- [x] `/admin/users` - 사용자 검색 및 목록
+- [x] `/admin/users/:id` - 사용자 상세 (멤버십 부여/삭제)
 
 ### 2.4 관리자 UI 테스트 (Vitest)
 - [ ] 멤버십 유형 관리 컴포넌트 테스트
@@ -59,22 +59,22 @@
 
 ---
 
-## Phase 3: 사용자 멤버십 기능 (The Gatekeeper)
+## Phase 3: 사용자 멤버십 기능 (The Gatekeeper) ✅
 
-### 3.1 공개 API (Rails)
+### 3.1 공개 API (Rails) ✅
 - [x] `GET /api/v1/membership_types` - 멤버십 유형 목록
 - [x] `GET /api/v1/membership_types/:id` - 멤버십 유형 상세
 - [x] `GET /api/v1/users/:user_id/memberships` - 사용자 멤버십 조회
 
-### 3.2 사용자 식별 (Mock Auth)
-- [ ] user_id 기반 사용자 식별 로직 (실제 인증 없이)
-- [ ] 멤버십 상태 확인 (active/expired/cancelled)
+### 3.2 사용자 식별 (Mock Auth) ✅
+- [x] user_id 기반 사용자 식별 로직 (실제 인증 없이)
+- [x] 멤버십 상태 확인 (active/expired/cancelled)
 
-### 3.3 사용자 UI (React)
-- [ ] `/` 홈 페이지 - 멤버십 상태 표시
-- [ ] `/memberships` 멤버십 페이지
-- [ ] 대화 페이지 접근 전 멤버십 검증 (Route Guard)
-- [ ] TanStack Query 설정 및 API 연동
+### 3.3 사용자 UI (React) ✅
+- [x] `/` 홈 페이지 - 멤버십 상태 표시
+- [x] `/memberships` 멤버십 페이지
+- [x] 대화 페이지 접근 전 멤버십 검증 (Route Guard)
+- [x] TanStack Query 설정 및 API 연동
 
 ### 3.4 사용자 UI 테스트 (Vitest)
 - [ ] 홈 페이지 컴포넌트 테스트
