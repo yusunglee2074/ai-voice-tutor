@@ -1,12 +1,16 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../hooks/useAuth'
 import { apiClient } from '../api/client'
+import { useConversation } from '../hooks/useConversation'
+import { useAudioCapture } from '../hooks/useAudioCapture'
+import { useAudioPlayer } from '../hooks/useAudioPlayer'
 
 export default function ConversationPage() {
   const { user, isLoading: authLoading } = useAuth()
   const navigate = useNavigate()
+  const [isInitialized, setIsInitialized] = useState(false)
 
   const { data: memberships, isLoading: membershipsLoading } = useQuery({
     queryKey: ['userMemberships', user?.id],
@@ -18,6 +22,32 @@ export default function ConversationPage() {
   const hasConversationFeature = memberships?.some(
     (m) => m.is_active && m.membership_type.features.includes('대화')
   )
+
+  // WebSocket conversation hook
+  const {
+    messages,
+    isConnected,
+    isAiSpeaking,
+    currentTranscript,
+    connect,
+    disconnect,
+    sendAudio,
+    finalizeTranscript,
+    error: conversationError,
+  } = useConversation()
+
+  // Audio player hook
+  const { playAudio } = useAudioPlayer()
+
+  // Audio capture hook
+  const {
+    isRecording,
+    startRecording,
+    stopRecording,
+    error: audioError,
+  } = useAudioCapture({
+    onAudioData: sendAudio,
+  })
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -39,6 +69,47 @@ export default function ConversationPage() {
     }
   }, [membershipsLoading, hasActiveMembership, hasConversationFeature, navigate])
 
+  // Initialize WebSocket connection
+  useEffect(() => {
+    if (user && hasActiveMembership && hasConversationFeature && !isInitialized) {
+      connect()
+      setIsInitialized(true)
+    }
+
+    return () => {
+      if (isInitialized) {
+        disconnect()
+      }
+    }
+  }, [user, hasActiveMembership, hasConversationFeature, isInitialized, connect, disconnect])
+
+  // Handle audio playback from TTS
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data
+      if (data.type === 'tts_chunk' && data.audio) {
+        playAudio(data.audio)
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [playAudio])
+
+  const handleMicToggle = async () => {
+    if (isRecording) {
+      stopRecording()
+    } else {
+      await startRecording()
+    }
+  }
+
+  const handleFinalizeTranscript = () => {
+    if (currentTranscript) {
+      finalizeTranscript()
+    }
+  }
+
   if (authLoading || membershipsLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -51,6 +122,8 @@ export default function ConversationPage() {
     return null
   }
 
+  const error = conversationError || audioError
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow">
@@ -59,6 +132,16 @@ export default function ConversationPage() {
             Ringle
           </Link>
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  isConnected ? 'bg-green-500' : 'bg-red-500'
+                }`}
+              />
+              <span className="text-sm text-gray-600">
+                {isConnected ? '연결됨' : '연결 끊김'}
+              </span>
+            </div>
             <span className="text-gray-700">{user.name}</span>
             <Link
               to="/"
@@ -74,99 +157,100 @@ export default function ConversationPage() {
         <div className="bg-white rounded-lg shadow-lg p-8">
           <h1 className="text-3xl font-bold mb-4">AI와 대화하기</h1>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
-            <h2 className="text-lg font-semibold text-blue-900 mb-2">
-              🎙️ 음성 대화 기능
-            </h2>
-            <p className="text-blue-800 mb-4">
-              실시간 음성 대화 기능은 Phase 4, 5에서 구현될 예정입니다.
-            </p>
-            <ul className="space-y-2 text-blue-800 text-sm">
-              <li>• Phase 4: 백엔드 오디오 파이프라인 (WebSocket, STT, LLM, TTS)</li>
-              <li>• Phase 5: 프론트엔드 오디오 (AudioWorklet, Web Audio API)</li>
-            </ul>
-          </div>
-
-          <div className="space-y-4">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-              <div className="text-gray-400 mb-4">
-                <svg
-                  className="w-16 h-16 mx-auto"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                  />
-                </svg>
-              </div>
-              <p className="text-gray-600 mb-2">마이크 버튼</p>
-              <p className="text-sm text-gray-500">
-                음성 인식 및 파형 시각화 (구현 예정)
-              </p>
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <p className="text-red-800">{error}</p>
             </div>
+          )}
 
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-              <div className="text-gray-400 mb-4">
-                <svg
-                  className="w-16 h-16 mx-auto"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                  />
-                </svg>
+          {/* Status indicator */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-900">상태</p>
+                <p className="text-sm text-blue-700">
+                  {isRecording
+                    ? '🎤 녹음 중...'
+                    : isAiSpeaking
+                    ? '🤖 AI가 말하는 중...'
+                    : '대기 중'}
+                </p>
               </div>
-              <p className="text-gray-600 mb-2">대화 내용</p>
-              <p className="text-sm text-gray-500">
-                AI 응답 텍스트 스트리밍 표시 (구현 예정)
-              </p>
-            </div>
-
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-              <div className="text-gray-400 mb-4">
-                <svg
-                  className="w-16 h-16 mx-auto"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <p className="text-gray-600 mb-2">"답변 완료" 버튼</p>
-              <p className="text-sm text-gray-500">
-                STT 확정 및 LLM 요청 트리거 (구현 예정)
-              </p>
+              {currentTranscript && (
+                <div className="text-sm text-blue-700">
+                  인식 중: "{currentTranscript}"
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="mt-8 bg-gray-50 rounded-lg p-6">
-            <h3 className="font-semibold mb-3">구현 예정 기능:</h3>
-            <ul className="space-y-2 text-gray-700 text-sm">
-              <li>✓ 멤버십 검증 및 Route Guard (완료)</li>
-              <li>• WebSocket 연결 및 실시간 통신</li>
-              <li>• 마이크 입력 및 16kHz PCM 변환</li>
-              <li>• AssemblyAI 실시간 STT</li>
-              <li>• LLM 스트리밍 응답</li>
-              <li>• Cartesia TTS 및 오디오 재생</li>
-              <li>• 음성 인식 중 파형 시각화</li>
-              <li>• 대화 히스토리 표시</li>
-            </ul>
+          {/* Conversation messages */}
+          <div className="border rounded-lg p-4 mb-6 h-96 overflow-y-auto bg-gray-50">
+            {messages.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                대화를 시작하려면 마이크 버튼을 눌러주세요
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {messages.map((message, index) => (
+                  <div
+                    key={index}
+                    className={`flex ${
+                      message.role === 'user' ? 'justify-end' : 'justify-start'
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[70%] rounded-lg p-3 ${
+                        message.role === 'user'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white border border-gray-200'
+                      }`}
+                    >
+                      <p className="text-sm">{message.content}</p>
+                      <p
+                        className={`text-xs mt-1 ${
+                          message.role === 'user' ? 'text-blue-100' : 'text-gray-500'
+                        }`}
+                      >
+                        {new Date(message.timestamp).toLocaleTimeString('ko-KR')}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="flex gap-4">
+            <button
+              onClick={handleMicToggle}
+              disabled={!isConnected || isAiSpeaking}
+              className={`flex-1 py-4 rounded-lg font-semibold transition-colors ${
+                isRecording
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-300 disabled:cursor-not-allowed'
+              }`}
+            >
+              {isRecording ? '🎤 녹음 중지' : '🎤 녹음 시작'}
+            </button>
+
+            <button
+              onClick={handleFinalizeTranscript}
+              disabled={!currentTranscript || isAiSpeaking}
+              className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              ✓ 답변 완료
+            </button>
+          </div>
+
+          <div className="mt-6 bg-gray-50 rounded-lg p-4">
+            <h3 className="font-semibold mb-2 text-sm">사용 방법:</h3>
+            <ol className="space-y-1 text-gray-700 text-sm">
+              <li>1. "녹음 시작" 버튼을 눌러 말하기 시작</li>
+              <li>2. 말이 끝나면 "답변 완료" 버튼 클릭</li>
+              <li>3. AI가 응답을 생성하고 음성으로 답변</li>
+            </ol>
           </div>
         </div>
       </div>
