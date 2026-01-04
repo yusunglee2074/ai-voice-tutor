@@ -9,10 +9,10 @@ node_modules/
 .env
 
 # --- Client (Vite + React) ---
-client/node_modules/
-client/dist/
-client/.vite/
-client/.eslintcache
+web/node_modules/
+web/dist/
+web/.vite/
+web/.eslintcache
 
 # --- Server (Rails) ---
 server/log/*.log
@@ -28,3 +28,7 @@ server/config/master.key
 
 # --- Docker ---
 .docker-data/
+
+
+# --- Etc ---
+.aider*
