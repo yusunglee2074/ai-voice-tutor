@@ -1,7 +1,7 @@
 class CartesiaService
-  CARTESIA_API_KEY = ENV.fetch('CARTESIA_API_KEY', 'test_key')
-  CARTESIA_WS_URL = 'wss://api.cartesia.ai/tts/websocket'
-  VOICE_ID = ENV.fetch('CARTESIA_VOICE_ID', 'a0e99841-438c-4a64-b679-ae501e7d6091') # Barbershop Man
+  CARTESIA_API_KEY = ENV.fetch("CARTESIA_API_KEY", "test_key")
+  CARTESIA_WS_URL = "wss://api.cartesia.ai/tts/websocket"
+  VOICE_ID = ENV.fetch("CARTESIA_VOICE_ID", "6ccbfb76-1fc6-48f7-b71d-91ac6298247b")
 
   def initialize
     @connection = nil
@@ -11,10 +11,10 @@ class CartesiaService
 
   # Connect to Cartesia WebSocket
   def connect
-    require 'faye/websocket'
-    require 'eventmachine'
+    require "faye/websocket"
+    require "eventmachine"
 
-    url = "#{CARTESIA_WS_URL}?api_key=#{CARTESIA_API_KEY}&cartesia_version=2024-06-10"
+    url = "#{CARTESIA_WS_URL}?api_key=#{CARTESIA_API_KEY }&cartesia_version=2025-04-16"
 
     EM.run do
       @connection = Faye::WebSocket::Client.new(url)
@@ -43,17 +43,17 @@ class CartesiaService
     return unless @connection
 
     message = {
-      model_id: 'sonic-english',
+      model_id: "sonic-3-latest",
       voice: {
-        mode: 'id',
+        mode: "id",
         id: VOICE_ID
       },
       transcript: text,
       continue: !is_final,
       context_id: @context_id,
       output_format: {
-        container: 'raw',
-        encoding: 'pcm_s16le',
+        container: "raw",
+        encoding: "pcm_s16le",
         sample_rate: 24000
       }
     }.to_json
@@ -77,14 +77,14 @@ class CartesiaService
   def handle_message(data)
     message = JSON.parse(data)
 
-    case message['type']
-    when 'chunk'
+    case message["type"]
+    when "chunk"
       # Audio data is base64 encoded PCM
-      audio_base64 = message['data']
+      audio_base64 = message["data"]
       @on_audio_callback&.call(audio_base64) if audio_base64
-    when 'done'
+    when "done"
       Rails.logger.debug "[Cartesia] TTS generation complete"
-    when 'error'
+    when "error"
       Rails.logger.error "[Cartesia] Error: #{message['error']}"
     end
   rescue JSON::ParserError => e

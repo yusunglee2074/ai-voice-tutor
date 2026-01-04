@@ -23,9 +23,9 @@ class ConversationChannel < ApplicationCable::Channel
   end
 
   def receive(data)
-    if data['type'] == 'audio'
-      handle_audio_data(data['audio'])
-    elsif data['type'] == 'finalize_transcript'
+    if data["type"] == "audio"
+      handle_audio_data(data["audio"])
+    elsif data["type"] == "finalize_transcript"
       handle_finalize_transcript
     end
   end
@@ -37,7 +37,7 @@ class ConversationChannel < ApplicationCable::Channel
 
     # Send greeting text to client
     transmit({
-      type: 'llm_chunk',
+      type: "llm_chunk",
       text: greeting,
       ts: Time.now.to_f
     })
@@ -46,7 +46,7 @@ class ConversationChannel < ApplicationCable::Channel
     Thread.new do
       @tts_service.on_audio do |audio_base64|
         transmit({
-          type: 'tts_chunk',
+          type: "tts_chunk",
           audio: audio_base64,
           ts: Time.now.to_f
         })
@@ -57,7 +57,7 @@ class ConversationChannel < ApplicationCable::Channel
     end
 
     # Add to conversation history
-    @llm_service.add_message('assistant', greeting)
+    @llm_service.add_message("assistant", greeting)
   end
 
   def handle_audio_data(audio_base64)
@@ -77,7 +77,7 @@ class ConversationChannel < ApplicationCable::Channel
   def setup_stt_callbacks
     @stt_service.on_transcript do |text|
       transmit({
-        type: 'stt_chunk',
+        type: "stt_chunk",
         transcript: text,
         ts: Time.now.to_f
       })
@@ -85,7 +85,7 @@ class ConversationChannel < ApplicationCable::Channel
 
     @stt_service.on_final_transcript do |text|
       transmit({
-        type: 'stt_output',
+        type: "stt_output",
         transcript: text,
         ts: Time.now.to_f
       })
@@ -114,7 +114,7 @@ class ConversationChannel < ApplicationCable::Channel
       assistant_response += text_chunk
 
       transmit({
-        type: 'llm_chunk',
+        type: "llm_chunk",
         text: text_chunk,
         ts: Time.now.to_f
       })
@@ -127,17 +127,17 @@ class ConversationChannel < ApplicationCable::Channel
     @tts_service.send_text("", is_final: true)
 
     transmit({
-      type: 'llm_end',
+      type: "llm_end",
       ts: Time.now.to_f
     })
 
     # Add to conversation history
-    @llm_service.add_message('assistant', assistant_response)
+    @llm_service.add_message("assistant", assistant_response)
   rescue => e
     Rails.logger.error "[ConversationChannel] Error processing message: #{e.message}"
     transmit({
-      type: 'error',
-      message: 'Failed to process your message. Please try again.',
+      type: "error",
+      message: "Failed to process your message. Please try again.",
       ts: Time.now.to_f
     })
   end

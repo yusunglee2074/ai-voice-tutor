@@ -1,323 +1,848 @@
-# 링글 대화 오디오 기술 문서
+# Voice WebSocket 프로토콜 기술 문서
+
+## 개요
+
+실시간 음성 대화 시스템의 WebSocket 프로토콜 명세입니다.  
+음성 입력 → STT → LLM → TTS 파이프라인을 구현합니다.
+
+**동작 방식:** Push-to-Talk (PTT)
+- 사용자가 녹음 버튼을 눌러 음성 녹음 시작
+- 녹음 완료 버튼을 눌러 서버에 전송 완료 신호
 
 ---
 
-## 아키텍처 개요
-전체 시스템은 스트리밍 기반의 비동기 파이프라인으로 구성됩니다.
-프론트는 React(vite, typescript), 백엔드는 Rails로 구현되고, 이 둘은 오디오 전송을 위해 WebSocket로 연결됩니다.
+## 1. 아키텍처
 
-
-### 핵심 설계 원칙
-
-1. **스트리밍 우선**: 모든 컴포넌트가 데이터를 점진적으로 스트리밍
-2. **비동기 제너레이터**: 조합 가능하고 백프레셔를 인식하는 변환
-3. **Producer-Consumer 패턴**: 최대 처리량을 위한 동시 실행
-4. 유연성을 위해 STT, TTS, LLM는 변경하기 쉽도록 추상화해서 느슨한 연결 해주세요.
-
----
-
-## 오디오 캡처 (브라우저)
-
-### AudioWorklet 기반 처리
-
-브라우저의 마이크 입력은 Web Audio API의 AudioWorklet을 사용하여 저지연으로 처리되야합니다.
-
-### 오디오 사양
-
-| 항목 | 값 |
-|------|-----|
-| 샘플레이트 | 16 kHz (48kHz에서 다운샘플링) |
-| 포맷 | 16-bit signed PCM, mono |
-| 청크 크기 | 1600 샘플 (100ms) |
-
-### 마이크 설정
-echoCancellation(에코 제거), noiseSuppression(노이즈 억제), autoGainControl(자동 게인 조절)
-
----
-
-## WebSocket 통신
-
-### 브라우저 → 서버
-
-```typescript
-// WebSocket 연결 설정
-const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-ws.binaryType = "arraybuffer";
-
-// 오디오 청크 전송 (바이너리)
-audioCapture.start((chunk: ArrayBuffer) => {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(chunk);  // 버퍼링 없이 즉시 전송
-  }
-});
 ```
-
-### 서버 → 브라우저
-
-서버는 JSON 인코딩된 이벤트를 전송합니다:
-```typescript
-ws.onmessage = (event) => {
-  const data: ServerEvent = JSON.parse(event.data);
-
-  switch (data.type) {
-    case "stt_chunk":    // 사용자의 말(Stream)
-    case "stt_output":   // 사용자의 말 최종
-    case "llm_chunk":    // LLM 응답(Stream)
-    case "tts_chunk":    // Base64 인코딩된 PCM 오디오
-  }
-};
+┌─────────────────────────────────────────────────────────────────┐
+│                         클라이언트 (Web)                          │
+├─────────────────────────────────────────────────────────────────┤
+│  [녹음] 버튼 → 마이크 → PCM 16kHz → WebSocket 전송               │
+│  [완료] 버튼 → end_of_speech 이벤트 전송                          │
+│  <────────────────── WebSocket → JSON 이벤트 → 오디오 재생       │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                │ ws:// 또는 wss://
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                            서버 (Rails)                          │
+├─────────────────────────────────────────────────────────────────┤
+│  오디오 수신 → STT (AssemblyAI) → LLM (Claude) → TTS (Cartesia) │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## STT (Speech-to-Text)
+## 2. WebSocket 연결
 
-### AssemblyAI 실시간 스트리밍
+**엔드포인트:** `/ws`
 
-AssemblyAI의 WebSocket 기반 API를 사용합니다.
-웹에서 전달받은 바이너리를 그대로 전달합니다.
+```
+ws://{host}/ws
+wss://{host}/ws  (HTTPS)
+```
+
+> **Note:** Rails에서 raw WebSocket을 사용합니다 (Action Cable이 아님).
 
 ---
 
-## LLM 처리
-LLM은 STT 출력을 받아 응답을 생성합니다. 스트리밍 모드로 동작하여 토큰 단위로 응답을 전달합니다.
+## 3. 메시지 프로토콜
+
+### 3.1 클라이언트 → 서버
+
+| 형식 | 타입 | 설명 |
+|------|------|------|
+| Binary | `ArrayBuffer` | PCM 오디오 (16kHz, 16-bit signed LE, mono) |
+| JSON | `{ type: "end_of_speech" }` | 녹음 완료 신호 |
+
+**오디오 청크 크기:** 1,600 샘플 (100ms)
+
+### 3.2 서버 → 클라이언트
+
+모든 이벤트는 JSON 문자열로 전송됩니다.
+
+---
+
+## 4. 이벤트 타입
+
+### 공통 필드
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `type` | `string` | 이벤트 타입 |
+| `ts` | `number` | 타임스탬프 (ms, Unix epoch) |
+
+### 4.1 클라이언트 → 서버 이벤트
+
+#### `end_of_speech` - 녹음 완료
+
+사용자가 녹음 완료 버튼을 눌렀을 때 전송합니다.
+
+```json
+{ "type": "end_of_speech" }
+```
+
+### 4.2 서버 → 클라이언트 이벤트
+
+#### `stt_chunk` - 부분 전사 (실시간)
+
+```json
+{ "type": "stt_chunk", "ts": 1704355200000, "transcript": "안녕하세" }
+```
+
+#### `stt_output` - 최종 전사
+
+```json
+{ "type": "stt_output", "ts": 1704355201000, "transcript": "안녕하세요." }
+```
+
+#### `llm_chunk` - LLM 응답 스트리밍
+
+```json
+{ "type": "llm_chunk", "ts": 1704355202000, "text": "안녕하세요!" }
+```
+
+#### `llm_end` - LLM 응답 완료
+
+```json
+{ "type": "llm_end", "ts": 1704355203000 }
+```
+
+#### `tts_chunk` - 음성 합성 오디오
+
+```json
+{ "type": "tts_chunk", "ts": 1704355204000, "audio": "base64..." }
+```
+
+**TTS 오디오 포맷:** 24kHz, 16-bit signed little-endian, mono, Base64 인코딩
+
+#### `error` - 에러
+
+```json
+{ "type": "error", "ts": 1704355205000, "message": "STT connection failed" }
+```
+
+---
+
+## 5. 이벤트 흐름 (Push-to-Talk)
+
+```
+클라이언트                         서버
+    │                               │
+    │  [녹음 버튼 클릭]               │
+    │── Binary (PCM) ──────────────>│
+    │── Binary (PCM) ──────────────>│
+    │<── stt_chunk ─────────────────│  (실시간 피드백)
+    │── Binary (PCM) ──────────────>│
+    │<── stt_chunk ─────────────────│
+    │                               │
+    │  [완료 버튼 클릭]               │
+    │── { type: "end_of_speech" } ─>│
+    │                               │  STT 최종 처리
+    │<── stt_output ────────────────│
+    │                               │  LLM 처리
+    │<── llm_chunk ─────────────────│
+    │<── llm_chunk ─────────────────│
+    │<── llm_end ───────────────────│
+    │                               │  TTS 처리
+    │<── tts_chunk ─────────────────│
+    │<── tts_chunk ─────────────────│
+    │                               │
+    │  [다음 녹음 버튼 클릭]           │
+    │── Binary (PCM) ──────────────>│
+    │   ...                         │
+```
+
+---
+
+## 6. 타입 정의
+
+### TypeScript (클라이언트)
 
 ```typescript
-async function* llmStream(eventStream: AsyncIterable<LlmEvent>) {
-  for await (const event of eventStream) {
-    yield event;  // 모든 이벤트 패스스루
+// 클라이언트 → 서버
+type ClientEvent = { type: "end_of_speech" };
 
-    if (event.type === "stt_output") {
-      const stream = await llm.stream(event.transcript);
+// 서버 → 클라이언트
+type ServerEvent =
+  | { type: "stt_chunk"; ts: number; transcript: string }
+  | { type: "stt_output"; ts: number; transcript: string }
+  | { type: "llm_chunk"; ts: number; text: string }
+  | { type: "llm_end"; ts: number }
+  | { type: "tts_chunk"; ts: number; audio: string }
+  | { type: "error"; ts: number; message: string };
+```
 
-      for await (const chunk of stream) {
-        yield { type: "llm_chunk", text: chunk.text, ts: Date.now() };
+### Ruby (서버)
+
+```ruby
+def emit(type, **data)
+  { type: type, ts: (Time.now.to_f * 1000).to_i, **data }
+end
+```
+
+---
+
+## 7. 프론트엔드 구현 가이드
+
+### 7.1 오디오 캡처 (마이크 → PCM 16kHz)
+
+```typescript
+const workletCode = `
+class PCMProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.buffer = [];
+    this.resampleRatio = sampleRate / 16000;
+    this.resampleIndex = 0;
+  }
+
+  process(inputs) {
+    const input = inputs[0]?.[0];
+    if (!input) return true;
+
+    for (let i = 0; i < input.length; i++) {
+      this.resampleIndex += 1;
+      if (this.resampleIndex >= this.resampleRatio) {
+        this.resampleIndex -= this.resampleRatio;
+        const sample = Math.max(-1, Math.min(1, input[i]));
+        const int16 = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        this.buffer.push(int16);
+      }
+    }
+
+    const CHUNK_SIZE = 1600;
+    while (this.buffer.length >= CHUNK_SIZE) {
+      const chunk = this.buffer.splice(0, CHUNK_SIZE);
+      const int16Array = new Int16Array(chunk);
+      this.port.postMessage(int16Array.buffer, [int16Array.buffer]);
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-processor', PCMProcessor);
+`;
+
+export function createAudioCapture() {
+  let audioContext: AudioContext | null = null;
+  let workletNode: AudioWorkletNode | null = null;
+  let mediaStream: MediaStream | null = null;
+
+  return {
+    async start(onChunk: (data: ArrayBuffer) => void) {
+      audioContext = new AudioContext();
+      const blob = new Blob([workletCode], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      await audioContext.audioWorklet.addModule(url);
+      URL.revokeObjectURL(url);
+
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+
+      const source = audioContext.createMediaStreamSource(mediaStream);
+      workletNode = new AudioWorkletNode(audioContext, 'pcm-processor');
+      workletNode.port.onmessage = (e) => onChunk(e.data);
+      source.connect(workletNode);
+    },
+
+    stop() {
+      workletNode?.disconnect();
+      mediaStream?.getTracks().forEach(t => t.stop());
+      workletNode = null;
+      mediaStream = null;
+    }
+  };
+}
+```
+
+### 7.2 오디오 재생 (Base64 PCM → 스피커)
+
+```typescript
+const TTS_SAMPLE_RATE = 24000;
+
+export function createAudioPlayback() {
+  let audioContext: AudioContext | null = null;
+  let nextPlayTime = 0;
+
+  return {
+    play(base64: string) {
+      if (!audioContext) {
+        audioContext = new AudioContext({ sampleRate: TTS_SAMPLE_RATE });
+      }
+      if (audioContext.state === 'suspended') audioContext.resume();
+
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const view = new DataView(bytes.buffer);
+      const numSamples = bytes.length / 2;
+      const audioBuffer = audioContext.createBuffer(1, numSamples, TTS_SAMPLE_RATE);
+      const channel = audioBuffer.getChannelData(0);
+      for (let i = 0; i < numSamples; i++) {
+        channel[i] = view.getInt16(i * 2, true) / 32768;
       }
 
-      yield { type: "llm_end", ts: Date.now() };
-    }
-  }
-}
-```
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
 
----
-
-## TTS (Text-to-Speech)
-
-### Cartesia TTS
-
-#### 연결 설정
-
-```typescript
-const url = "wss://api.cartesia.ai/tts/websocket";
-const params = new URLSearchParams({
-  api_key: apiKey,
-  cartesia_version: "2025-04-16",
-});
-```
-
-#### 오디오 출력 설정
-
-| 항목 | 값 |
-|------|-----|
-| 컨테이너 | raw (컨테이너 없음) |
-| 인코딩 | pcm_s16le (16-bit little-endian) |
-| 샘플레이트 | 24 kHz |
-
-#### 텍스트 전송
-
-```typescript
-async sendText(text: string): Promise<void> {
-  const payload: CartesiaTTSRequest = {
-    model_id: "sonic-3",
-    transcript: text,
-    voice: { mode: "id", id: this.voiceId },
-    output_format: {
-      container: "raw",
-      encoding: "pcm_s16le",
-      sample_rate: 24000,
+      if (nextPlayTime < audioContext.currentTime) nextPlayTime = audioContext.currentTime;
+      source.start(nextPlayTime);
+      nextPlayTime += audioBuffer.duration;
     },
-    language: "en",
-    context_id: this._generateContextId(),
+
+    stop() { nextPlayTime = 0; }
   };
-  conn.send(JSON.stringify(payload));
 }
 ```
 
-#### 오디오 수신
+### 7.3 Push-to-Talk 세션 관리
 
 ```typescript
-ws.on("message", (data) => {
-  const message: CartesiaTTSResponse = JSON.parse(data.toString());
+type SessionState = 'disconnected' | 'idle' | 'recording' | 'processing';
 
-  if (message.data) {
-    this._bufferIterator.push({
-      type: "tts_chunk",
-      audio: message.data,  // Base64 인코딩된 PCM
-      ts: Date.now(),
-    });
+export function createVoiceSession() {
+  let ws: WebSocket | null = null;
+  let state: SessionState = 'disconnected';
+  const capture = createAudioCapture();
+  const playback = createAudioPlayback();
+  let onStateChange: ((state: SessionState) => void) | null = null;
+
+  function setState(newState: SessionState) {
+    state = newState;
+    onStateChange?.(state);
   }
-});
+
+  return {
+    connect(onEvent: (event: ServerEvent) => void, stateCallback: (state: SessionState) => void) {
+      onStateChange = stateCallback;
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${location.host}/ws`);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => setState('idle');
+
+      ws.onmessage = (e) => {
+        const event: ServerEvent = JSON.parse(e.data);
+        onEvent(event);
+
+        if (event.type === 'tts_chunk') playback.play(event.audio);
+        if (event.type === 'llm_end') setState('idle');
+        if (event.type === 'error') setState('idle');
+      };
+
+      ws.onerror = () => setState('disconnected');
+      ws.onclose = () => setState('disconnected');
+    },
+
+    async startRecording() {
+      if (state !== 'idle' || !ws || ws.readyState !== WebSocket.OPEN) return;
+      
+      playback.stop();
+      try {
+        await capture.start((chunk) => {
+          if (ws?.readyState === WebSocket.OPEN) ws.send(chunk);
+        });
+        setState('recording');
+      } catch (err) {
+        console.error('Microphone access denied:', err);
+      }
+    },
+
+    stopRecording() {
+      if (state !== 'recording' || !ws) return;
+      capture.stop();
+      ws.send(JSON.stringify({ type: 'end_of_speech' }));
+      setState('processing');
+    },
+
+    disconnect() {
+      capture.stop();
+      playback.stop();
+      ws?.close();
+      ws = null;
+      setState('disconnected');
+    },
+
+    getState: () => state
+  };
+}
 ```
 
----
+### 7.4 React 컴포넌트 예시
 
-## 오디오 재생 (브라우저)
+```tsx
+import { useState, useRef, useEffect } from 'react';
+import { createVoiceSession, type ServerEvent, type SessionState } from './voice';
 
-### 스케줄링 기반 재생
+export function VoiceChat() {
+  const [state, setState] = useState<SessionState>('disconnected');
+  const [transcript, setTranscript] = useState('');
+  const [response, setResponse] = useState('');
+  const sessionRef = useRef(createVoiceSession());
 
-Web Audio API의 정밀한 타이밍을 활용하여 끊김 없는 재생을 구현합니다.
+  useEffect(() => {
+    const session = sessionRef.current;
+    session.connect(
+      (event) => {
+        switch (event.type) {
+          case 'stt_chunk': setTranscript(event.transcript); break;
+          case 'stt_output': setTranscript(event.transcript); setResponse(''); break;
+          case 'llm_chunk': setResponse(prev => prev + event.text); break;
+          case 'error': alert(event.message); break;
+        }
+      },
+      setState
+    );
+    return () => session.disconnect();
+  }, []);
 
-```typescript
-let nextPlayTime = 0;
-
-function processQueue(): void {
-  while (base64Queue.length > 0) {
-    const base64 = base64Queue.shift();
-
-    // 1. Base64 디코딩 → ArrayBuffer
-    const arrayBuffer = pcmBase64ToArrayBuffer(base64);
-
-    // 2. PCM → AudioBuffer 변환
-    const audioBuffer = createAudioBuffer(arrayBuffer);
-
-    // 3. AudioBufferSourceNode 생성 및 연결
-    const source = ctx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(ctx.destination);
-
-    // 4. 정확한 시점에 재생 스케줄링
-    if (nextPlayTime < ctx.currentTime) {
-      nextPlayTime = ctx.currentTime;  // 지연 시 현재 시간으로 리셋
+  const handleButton = async () => {
+    const session = sessionRef.current;
+    if (state === 'idle') {
+      await session.startRecording();
+    } else if (state === 'recording') {
+      session.stopRecording();
     }
+  };
 
-    source.start(nextPlayTime);
-    nextPlayTime += audioBuffer.duration;  // 다음 청크 시작 시간
-  }
-}
-```
-
-### 오디오 변환
-
-```typescript
-// Base64 → ArrayBuffer
-function pcmBase64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-// PCM Int16 → Float32 AudioBuffer
-function createAudioBuffer(arrayBuffer: ArrayBuffer): AudioBuffer {
-  const view = new DataView(arrayBuffer);
-  const samples = arrayBuffer.byteLength / 2;
-  const audioBuffer = ctx.createBuffer(1, samples, 24000);
-  const channel = audioBuffer.getChannelData(0);
-
-  for (let i = 0; i < samples; i++) {
-    const int16 = view.getInt16(i * 2, true);  // little-endian
-    channel[i] = int16 / 32768;  // 정규화
-  }
-
-  return audioBuffer;
+  return (
+    <div>
+      <button onClick={handleButton} disabled={state === 'processing' || state === 'disconnected'}>
+        {state === 'disconnected' && '연결 중...'}
+        {state === 'idle' && '🎤 녹음'}
+        {state === 'recording' && '✅ 완료'}
+        {state === 'processing' && '⏳ 처리중...'}
+      </button>
+      <p><strong>나:</strong> {transcript}</p>
+      <p><strong>AI:</strong> {response}</p>
+    </div>
+  );
 }
 ```
 
 ---
 
-## 반응성 최적화
+## 8. Rails 서버 구현 가이드
 
-### 1. 동시 Producer-Consumer 패턴
+### 8.1 Gemfile
 
-각 파이프라인 스테이지에서 Producer와 Consumer가 동시에 실행됩니다:
-
-```typescript
-async function* sttStream(audioStream: AsyncIterable<Uint8Array>) {
-  const stt = new AssemblyAISTT();
-  const passthrough = writableIterator<VoiceEvent>();
-
-  // Producer: 오디오를 STT로 전송 (비동기)
-  const producer = iife(async () => {
-    for await (const audioChunk of audioStream) {
-      await stt.sendAudio(audioChunk);
-    }
-  });
-
-  // Consumer: STT 이벤트 수신 (비동기)
-  const consumer = iife(async () => {
-    for await (const event of stt.receiveEvents()) {
-      passthrough.push(event);
-    }
-  });
-
-  // 동시 실행
-  yield* passthrough;
-  await Promise.all([producer, consumer]);
-}
+```ruby
+gem 'faye-websocket'          # Raw WebSocket 지원
+gem 'websocket-client-simple' # 외부 WebSocket 연결용
+gem 'anthropic'
+gem 'puma'                    # Rack hijack 지원 필요
 ```
 
-**이점**: 오디오 전송과 전사 수신이 병렬로 진행되어 순차적 병목 제거
+### 8.2 Middleware (Raw WebSocket)
 
-### 2. 모든 레이어에서의 스트리밍
+Action Cable 대신 `faye-websocket`을 사용하여 raw WebSocket을 처리합니다.
 
-| 구간 | 스트리밍 방식 |
-|------|-------------|
-| 브라우저 → 서버 | 100ms 청크 즉시 전송 |
-| 서버 → AssemblyAI | 바이너리 직접 전송 |
-| AssemblyAI → 서버 | 부분 전사 스트리밍 |
-| LLM | 토큰 단위 스트리밍 |
-| 서버 → Cartesia | 완성된 텍스트 전송 |
-| Cartesia → 브라우저 | 오디오 청크 스트리밍 |
+```ruby
+# lib/voice_websocket_middleware.rb
+require 'faye/websocket'
 
-### 3. Zero-Copy 전송
+class VoiceWebsocketMiddleware
+  def initialize(app)
+    @app = app
+  end
 
-- 브라우저 AudioWorklet
-- AssemblyAI 바이너리 전송
+  def call(env)
+    if Faye::WebSocket.websocket?(env) && env['PATH_INFO'] == '/ws'
+      ws = Faye::WebSocket.new(env)
+      session = VoiceSession.new(ws)
 
-### 4. 끊김 없는 오디오 재생
+      ws.on :open do |_|
+        session.start
+      end
 
-```typescript
-// Web Audio API의 정밀한 스케줄링
-source.start(nextPlayTime);
-nextPlayTime += audioBuffer.duration;
+      ws.on :message do |event|
+        session.handle_message(event.data)
+      end
 
-// 지연 발생 시 자동 복구
-if (nextPlayTime < ctx.currentTime) {
-  nextPlayTime = ctx.currentTime;
-}
+      ws.on :close do |_|
+        session.stop
+      end
+
+      ws.rack_response
+    else
+      @app.call(env)
+    end
+  end
+end
 ```
 
-### 6. 샘플레이트 전략
+### 8.3 VoiceSession 클래스
 
-| 구간 | 샘플레이트 | 이유 |
-|------|-----------|------|
-| 입력 (STT) | 16 kHz | STT 품질을 위한 최소 요구사항 |
-| 출력 (TTS) | 24 kHz | 품질과 대역폭의 균형 |
+```ruby
+# app/services/voice_session.rb
+class VoiceSession
+  def initialize(ws)
+    @ws = ws
+    @stt = nil
+    @tts = nil
+    @messages = []
+    @current_transcript = ''
+  end
 
-리샘플링은 브라우저 AudioWorklet에서 실시간 처리 (서버 부하 없음)
+  def start
+    @stt = AssemblyAIClient.new
+    @tts = CartesiaClient.new
+
+    # STT 이벤트 리스너
+    @stt.on_event do |event|
+      send_event(event)
+      if event[:type] == 'stt_output'
+        @current_transcript = event[:transcript]
+      end
+    end
+
+    # TTS 이벤트 리스너
+    @tts.on_event { |event| send_event(event) }
+  end
+
+  def handle_message(data)
+    if data.is_a?(Array) || data.encoding == Encoding::BINARY
+      # 바이너리 오디오 데이터
+      @stt&.send_audio(data)
+    else
+      # JSON 메시지
+      begin
+        msg = JSON.parse(data)
+        handle_end_of_speech if msg['type'] == 'end_of_speech'
+      rescue JSON::ParserError
+        # 바이너리로 처리
+        @stt&.send_audio(data)
+      end
+    end
+  end
+
+  def stop
+    @stt&.close
+    @tts&.close
+  end
+
+  private
+
+  def handle_end_of_speech
+    # STT에 강제 종료 신호 전송
+    @stt&.force_endpoint
+
+    # 최종 전사 대기 후 LLM 처리
+    Thread.new do
+      sleep 0.5  # 최종 전사 대기
+      process_llm(@current_transcript) if @current_transcript.present?
+      @current_transcript = ''
+    end
+  end
+
+  def process_llm(transcript)
+    @messages << { role: 'user', content: transcript }
+    response = ''
+
+    client = Anthropic::Client.new
+    client.messages(
+      model: 'claude-3-5-haiku-20241022',
+      max_tokens: 512,
+      system: 'You are a helpful sandwich shop assistant. Be concise.',
+      messages: @messages,
+      stream: proc { |chunk|
+        if chunk['type'] == 'content_block_delta'
+          text = chunk.dig('delta', 'text') || ''
+          response += text
+          send_event(type: 'llm_chunk', text: text)
+        end
+      }
+    )
+
+    @messages << { role: 'assistant', content: response }
+    send_event(type: 'llm_end')
+    @tts&.send_text(response)
+  rescue => e
+    send_event(type: 'error', message: e.message)
+  end
+
+  def send_event(event)
+    return unless @ws
+    event = { ts: (Time.now.to_f * 1000).to_i }.merge(event)
+    @ws.send(event.to_json)
+  end
+end
+```
+
+### 8.4 AssemblyAI 클라이언트 (STT)
+
+**API 버전:** v3  
+**엔드포인트:** `wss://streaming.assemblyai.com/v3/ws`
+
+```ruby
+# app/services/assembly_ai_client.rb
+require 'websocket-client-simple'
+
+class AssemblyAIClient
+  URL = "wss://streaming.assemblyai.com/v3/ws"
+
+  def initialize(sample_rate: 16000)
+    @callbacks = []
+    @mutex = Mutex.new
+    connect(sample_rate)
+  end
+
+  def send_audio(bytes)
+    return unless @ws&.open?
+    @ws.send(bytes, type: :binary)
+  end
+
+  # AssemblyAI에 강제 엔드포인트 신호 전송
+  def force_endpoint
+    return unless @ws&.open?
+    @ws.send({ type: 'force_endpoint' }.to_json)
+  end
+
+  def on_event(&block)
+    @mutex.synchronize { @callbacks << block }
+  end
+
+  def close
+    @ws&.close
+  end
+
+  private
+
+  def connect(sample_rate)
+    params = URI.encode_www_form(
+      sample_rate: sample_rate,
+      format_turns: true
+    )
+
+    @ws = WebSocket::Client::Simple.connect(
+      "#{URL}?#{params}",
+      headers: { 'Authorization' => ENV['ASSEMBLYAI_API_KEY'] }
+    )
+
+    @ws.on(:message) do |msg|
+      handle(JSON.parse(msg.data))
+    rescue JSON::ParserError => e
+      Rails.logger.error("AssemblyAI parse error: #{e}")
+    end
+
+    @ws.on(:error) { |e| Rails.logger.error("AssemblyAI error: #{e}") }
+  end
+
+  def handle(data)
+    return unless data['type'] == 'Turn'
+
+    event = if data['turn_is_formatted']
+      { type: 'stt_output', transcript: data['transcript'] }
+    else
+      { type: 'stt_chunk', transcript: data['transcript'] }
+    end
+
+    return if event[:transcript].blank?
+    @mutex.synchronize { @callbacks.each { |cb| cb.call(event) } }
+  end
+end
+```
+
+**AssemblyAI 클라이언트 메시지:**
+
+| 메시지 | 설명 |
+|--------|------|
+| `{ type: "force_endpoint" }` | 현재 발화 강제 종료 |
+| `{ type: "terminate_session" }` | 세션 종료 |
+
+### 8.5 Cartesia 클라이언트 (TTS)
+
+**API 버전:** 2025-04-16  
+**모델:** sonic-3
+
+```ruby
+# app/services/cartesia_client.rb
+require 'websocket-client-simple'
+
+class CartesiaClient
+  URL = "wss://api.cartesia.ai/tts/websocket"
+  MODEL = "sonic-3"
+  VOICE_ID = "f6ff7c0c-e396-40a9-a70b-f7607edb6937"
+  VERSION = "2025-04-16"
+
+  def initialize
+    @callbacks = []
+    @context_counter = 0
+    @mutex = Mutex.new
+    connect
+  end
+
+  def send_text(text)
+    return unless @ws&.open? && text.present?
+
+    @context_counter += 1
+    @ws.send({
+      model_id: MODEL,
+      transcript: text,
+      voice: { mode: 'id', id: VOICE_ID },
+      context_id: "ctx_#{(Time.now.to_f * 1000).to_i}_#{@context_counter}",
+      output_format: { container: 'raw', encoding: 'pcm_s16le', sample_rate: 24000 },
+      language: 'ko'
+    }.to_json)
+  end
+
+  def on_event(&block)
+    @mutex.synchronize { @callbacks << block }
+  end
+
+  def close
+    @ws&.close
+  end
+
+  private
+
+  def connect
+    params = URI.encode_www_form(
+      api_key: ENV['CARTESIA_API_KEY'],
+      cartesia_version: VERSION
+    )
+    @ws = WebSocket::Client::Simple.connect("#{URL}?#{params}")
+
+    @ws.on(:message) do |msg|
+      handle(JSON.parse(msg.data))
+    rescue JSON::ParserError => e
+      Rails.logger.error("Cartesia parse error: #{e}")
+    end
+
+    @ws.on(:error) { |e| Rails.logger.error("Cartesia error: #{e}") }
+  end
+
+  def handle(data)
+    return unless data['data']
+    @mutex.synchronize do
+      @callbacks.each { |cb| cb.call(type: 'tts_chunk', audio: data['data']) }
+    end
+  end
+end
+```
+
+### 8.6 Middleware 등록
+
+```ruby
+# config/application.rb
+require_relative '../lib/voice_websocket_middleware'
+
+module YourApp
+  class Application < Rails::Application
+    config.middleware.use VoiceWebsocketMiddleware
+  end
+end
+```
+
+### 8.7 Puma 설정 (Rack hijack 활성화)
+
+```ruby
+# config/puma.rb
+workers 0  # WebSocket은 단일 프로세스 권장
+threads_count = ENV.fetch("RAILS_MAX_THREADS") { 5 }
+threads threads_count, threads_count
+```
+
+### 8.8 환경 변수
+
+```bash
+ASSEMBLYAI_API_KEY=your_key
+CARTESIA_API_KEY=your_key
+ANTHROPIC_API_KEY=your_key
+```
 
 ---
 
-## 이벤트 타입
+## 9. 오디오 포맷 요약
 
-```typescript
-type VoiceEvent =
-  // STT 스테이지
-  | { type: "user_input"; audio: Uint8Array; ts: number }
-  | { type: "stt_chunk"; transcript: string; ts: number }
-  | { type: "stt_output"; transcript: string; ts: number }
+| 구간 | 샘플레이트 | 비트 | 채널 | 인코딩 |
+|------|-----------|------|------|--------|
+| 클라이언트 → 서버 | 16kHz | 16-bit signed | mono | raw PCM (little-endian) |
+| 서버 → 클라이언트 (TTS) | 24kHz | 16-bit signed | mono | Base64(raw PCM LE) |
 
-  // LLM 스테이지
-  | { type: "llm_chunk"; text: string; ts: number }
-  | { type: "llm_end"; ts: number }
+---
 
-  // TTS 스테이지
-  | { type: "tts_chunk"; audio: string; ts: number }  // Base64 PCM
+## 10. 상태 다이어그램
+
+```
+┌──────────────┐
+│ disconnected │
+└──────┬───────┘
+       │ WebSocket 연결
+       ▼
+┌──────────────┐  녹음 버튼   ┌───────────┐  완료 버튼   ┌────────────┐
+│     idle     │ ──────────> │ recording │ ──────────> │ processing │
+└──────────────┘             └───────────┘             └────────────┘
+       ^                                                      │
+       │                      llm_end 수신                     │
+       └──────────────────────────────────────────────────────┘
 ```
 
 ---
 
+## 11. 에러 처리
+
+### 클라이언트
+
+```typescript
+ws.onerror = () => {
+  // 재연결 또는 사용자 알림
+  setState('disconnected');
+};
+
+// 서버 에러 이벤트 처리
+if (event.type === 'error') {
+  alert(event.message);
+  setState('idle');
+}
+```
+
+### 서버
+
+```ruby
+def process_llm(transcript)
+  # ...
+rescue => e
+  send_event(type: 'error', message: "LLM 처리 실패: #{e.message}")
+end
+```
+
+---
+
+## 12. 테스트
+
+### WebSocket 연결 테스트
+
+```bash
+# wscat 설치
+npm install -g wscat
+
+# 연결 테스트
+wscat -c ws://localhost:3000/ws
+
+# JSON 메시지 전송
+> {"type":"end_of_speech"}
+```
+
+### 오디오 파일 전송 테스트 (Ruby)
+
+```ruby
+require 'websocket-client-simple'
+
+ws = WebSocket::Client::Simple.connect('ws://localhost:3000/ws')
+
+ws.on(:message) { |msg| puts msg.data }
+
+# PCM 파일 전송
+File.open('test.pcm', 'rb') do |f|
+  while (chunk = f.read(3200))  # 100ms chunks
+    ws.send(chunk, type: :binary)
+    sleep 0.1
+  end
+end
+
+ws.send({ type: 'end_of_speech' }.to_json)
+```

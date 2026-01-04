@@ -7,29 +7,95 @@ interface ConversationMessage {
   timestamp: number
 }
 
+type SessionState = 'disconnected' | 'idle' | 'processing'
+
+interface ServerEvent {
+  type: 'stt_chunk' | 'stt_output' | 'llm_chunk' | 'llm_end' | 'tts_chunk' | 'error'
+  ts: number
+  transcript?: string
+  text?: string
+  audio?: string
+  message?: string
+}
+
 interface UseConversationResult {
   messages: ConversationMessage[]
-  isConnected: boolean
-  isAiSpeaking: boolean
+  state: SessionState
   currentTranscript: string
   connect: () => void
   disconnect: () => void
   sendAudio: (audioData: ArrayBuffer) => void
-  finalizeTranscript: () => void
+  sendEndOfSpeech: () => void
   error: string | null
 }
 
 export function useConversation(): UseConversationResult {
   const { user } = useAuth()
   const [messages, setMessages] = useState<ConversationMessage[]>([])
-  const [isConnected, setIsConnected] = useState(false)
-  const [isAiSpeaking, setIsAiSpeaking] = useState(false)
+  const [state, setState] = useState<SessionState>('disconnected')
   const [currentTranscript, setCurrentTranscript] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const cableRef = useRef<any>(null)
-  const subscriptionRef = useRef<any>(null)
+  const wsRef = useRef<WebSocket | null>(null)
   const currentAssistantMessageRef = useRef('')
+
+  // Use ref to avoid stale closure in WebSocket callbacks
+  const handleServerEventRef = useRef<(data: ServerEvent) => void>(() => {})
+
+  handleServerEventRef.current = (data: ServerEvent) => {
+    console.log('[WebSocket] Received event:', data.type, data)
+
+    switch (data.type) {
+      case 'stt_chunk':
+        if (data.transcript) {
+          setCurrentTranscript(data.transcript)
+        }
+        break
+
+      case 'stt_output':
+        if (data.transcript) {
+          setCurrentTranscript(data.transcript)
+        }
+        break
+
+      case 'llm_chunk':
+        if (data.text) {
+          currentAssistantMessageRef.current += data.text
+        }
+        break
+
+      case 'llm_end':
+        if (currentAssistantMessageRef.current) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: 'assistant',
+              content: currentAssistantMessageRef.current,
+              timestamp: Date.now(),
+            },
+          ])
+          currentAssistantMessageRef.current = ''
+        }
+        setState('idle')
+        break
+
+      case 'tts_chunk':
+        if (data.audio) {
+          window.dispatchEvent(
+            new CustomEvent('tts_audio', { detail: data.audio })
+          )
+        }
+        break
+
+      case 'error':
+        setError(data.message || 'Unknown error')
+        setState('idle')
+        break
+
+      default:
+        console.warn('[WebSocket] Unknown message type:', data)
+    }
+  }
 
   const connect = useCallback(() => {
     if (!user) {
@@ -38,37 +104,36 @@ export function useConversation(): UseConversationResult {
     }
 
     try {
-      // Create ActionCable connection
-      const cable = window.ActionCable.createConsumer(
-        `ws://localhost:3000/cable?user_id=${user.id}`
-      )
-      cableRef.current = cable
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const ws = new WebSocket(`${protocol}//localhost:3000/ws`)
+      ws.binaryType = 'arraybuffer'
+      wsRef.current = ws
 
-      // Subscribe to ConversationChannel
-      const subscription = cable.subscriptions.create(
-        {
-          channel: 'ConversationChannel',
-          user_id: user.id,
-        },
-        {
-          connected() {
-            console.log('[WebSocket] Connected to conversation channel')
-            setIsConnected(true)
-            setError(null)
-          },
+      ws.onopen = () => {
+        console.log('[WebSocket] Connected to /ws')
+        setState('idle')
+        setError(null)
+      }
 
-          disconnected() {
-            console.log('[WebSocket] Disconnected from conversation channel')
-            setIsConnected(false)
-          },
-
-          received(data: any) {
-            handleMessage(data)
-          },
+      ws.onmessage = (event) => {
+        try {
+          const data: ServerEvent = JSON.parse(event.data)
+          handleServerEventRef.current(data)
+        } catch (err) {
+          console.error('[WebSocket] Failed to parse message:', err)
         }
-      )
+      }
 
-      subscriptionRef.current = subscription
+      ws.onerror = (event) => {
+        console.error('[WebSocket] Error:', event)
+        setError('WebSocket connection error')
+        setState('disconnected')
+      }
+
+      ws.onclose = (event) => {
+        console.log('[WebSocket] Disconnected:', event.code, event.reason)
+        setState('disconnected')
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to connect'
       setError(errorMessage)
@@ -77,44 +142,33 @@ export function useConversation(): UseConversationResult {
   }, [user])
 
   const disconnect = useCallback(() => {
-    if (subscriptionRef.current) {
-      subscriptionRef.current.unsubscribe()
-      subscriptionRef.current = null
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
     }
-
-    if (cableRef.current) {
-      cableRef.current.disconnect()
-      cableRef.current = null
-    }
-
-    setIsConnected(false)
+    setState('disconnected')
     setCurrentTranscript('')
     currentAssistantMessageRef.current = ''
   }, [])
 
   const sendAudio = useCallback((audioData: ArrayBuffer) => {
-    if (!subscriptionRef.current || !isConnected) return
-
-    // Convert ArrayBuffer to base64
-    const bytes = new Uint8Array(audioData)
-    let binary = ''
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i])
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('[WebSocket] Cannot send audio: not connected')
+      return
     }
-    const base64 = btoa(binary)
 
-    subscriptionRef.current.send({
-      type: 'audio',
-      audio: base64,
-    })
-  }, [isConnected])
+    // Send binary PCM directly (no Base64 encoding!)
+    wsRef.current.send(audioData)
+  }, [])
 
-  const finalizeTranscript = useCallback(() => {
-    if (!subscriptionRef.current || !isConnected) return
+  const sendEndOfSpeech = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('[WebSocket] Cannot send end_of_speech: not connected')
+      return
+    }
 
-    subscriptionRef.current.send({
-      type: 'finalize_transcript',
-    })
+    // Send JSON message
+    wsRef.current.send(JSON.stringify({ type: 'end_of_speech' }))
 
     // Add user message to conversation
     if (currentTranscript) {
@@ -128,69 +182,30 @@ export function useConversation(): UseConversationResult {
       ])
       setCurrentTranscript('')
     }
-  }, [isConnected, currentTranscript])
 
-  const handleMessage = useCallback((data: any) => {
-    switch (data.type) {
-      case 'stt_chunk':
-        setCurrentTranscript(data.transcript)
-        break
-
-      case 'stt_output':
-        setCurrentTranscript(data.transcript)
-        break
-
-      case 'llm_chunk':
-        currentAssistantMessageRef.current += data.text
-        setIsAiSpeaking(true)
-        break
-
-      case 'llm_end':
-        // Add complete assistant message to conversation
-        if (currentAssistantMessageRef.current) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: 'assistant',
-              content: currentAssistantMessageRef.current,
-              timestamp: Date.now(),
-            },
-          ])
-          currentAssistantMessageRef.current = ''
-        }
-        setIsAiSpeaking(false)
-        break
-
-      case 'tts_chunk':
-        // Audio playback is handled by useAudioPlayer hook
-        break
-
-      case 'error':
-        setError(data.message)
-        setIsAiSpeaking(false)
-        break
-
-      default:
-        console.warn('[WebSocket] Unknown message type:', data.type)
-    }
-  }, [])
+    setState('processing')
+  }, [currentTranscript])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      disconnect()
+      // Small delay to handle React StrictMode double-invocation
+      const ws = wsRef.current
+      if (ws) {
+        wsRef.current = null
+        ws.close()
+      }
     }
-  }, [disconnect])
+  }, [])
 
   return {
     messages,
-    isConnected,
-    isAiSpeaking,
+    state,
     currentTranscript,
     connect,
     disconnect,
     sendAudio,
-    finalizeTranscript,
+    sendEndOfSpeech,
     error,
   }
 }

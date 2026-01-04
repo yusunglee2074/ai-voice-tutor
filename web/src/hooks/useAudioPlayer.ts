@@ -10,18 +10,16 @@ export function useAudioPlayer(): AudioPlayerHookResult {
   const scheduledTimeRef = useRef<number>(0)
   const audioQueueRef = useRef<AudioBuffer[]>([])
 
-  useEffect(() => {
-    // Initialize AudioContext
-    audioContextRef.current = new AudioContext({ sampleRate: 24000 })
-    scheduledTimeRef.current = audioContextRef.current.currentTime
-
-    return () => {
-      audioContextRef.current?.close()
+  const playAudioImpl = (audioBase64: string) => {
+    if (!audioContextRef.current) {
+      console.warn('[AudioPlayer] AudioContext not initialized')
+      return
     }
-  }, [])
 
-  const playAudio = useCallback((audioBase64: string) => {
-    if (!audioContextRef.current) return
+    // Resume AudioContext if suspended (browser autoplay policy)
+    if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume()
+    }
 
     try {
       // Decode base64 to ArrayBuffer
@@ -57,9 +55,39 @@ export function useAudioPlayer(): AudioPlayerHookResult {
       scheduledTimeRef.current = startTime + audioBuffer.duration
 
       audioQueueRef.current.push(audioBuffer)
+      console.log('[AudioPlayer] Playing audio chunk, duration:', audioBuffer.duration.toFixed(3), 's')
     } catch (err) {
-      console.error('Error playing audio:', err)
+      console.error('[AudioPlayer] Error playing audio:', err)
     }
+  }
+
+  // Use ref to avoid stale closure in event listener
+  const playAudioRef = useRef(playAudioImpl)
+  playAudioRef.current = playAudioImpl
+
+  useEffect(() => {
+    // Initialize AudioContext
+    audioContextRef.current = new AudioContext({ sampleRate: 24000 })
+    scheduledTimeRef.current = audioContextRef.current.currentTime
+    console.log('[AudioPlayer] AudioContext initialized')
+
+    // Listen for TTS audio events from WebSocket
+    const handleTTSAudio = (event: Event) => {
+      const customEvent = event as CustomEvent<string>
+      console.log('[AudioPlayer] Received tts_audio event')
+      playAudioRef.current(customEvent.detail)
+    }
+
+    window.addEventListener('tts_audio', handleTTSAudio)
+
+    return () => {
+      window.removeEventListener('tts_audio', handleTTSAudio)
+      audioContextRef.current?.close()
+    }
+  }, [])
+
+  const playAudio = useCallback((audioBase64: string) => {
+    playAudioRef.current(audioBase64)
   }, [])
 
   const stop = useCallback(() => {

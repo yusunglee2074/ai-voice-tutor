@@ -26,15 +26,17 @@ export default function ConversationPage() {
   // WebSocket conversation hook
   const {
     messages,
-    isConnected,
-    isAiSpeaking,
+    state,
     currentTranscript,
     connect,
     disconnect,
     sendAudio,
-    finalizeTranscript,
+    sendEndOfSpeech,
     error: conversationError,
   } = useConversation()
+
+  const isConnected = state !== 'disconnected'
+  const isAiSpeaking = state === 'processing'
 
   // Audio player hook
   const { playAudio } = useAudioPlayer()
@@ -45,6 +47,7 @@ export default function ConversationPage() {
     startRecording,
     stopRecording,
     error: audioError,
+    audioLevel,
   } = useAudioCapture({
     onAudioData: sendAudio,
   })
@@ -85,28 +88,20 @@ export default function ConversationPage() {
 
   // Handle audio playback from TTS
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const data = event.data
-      if (data.type === 'tts_chunk' && data.audio) {
-        playAudio(data.audio)
-      }
-    }
-
-    window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
+    // Audio playback is now handled by useAudioPlayer hook via custom events
+    // No need for additional message handling here
   }, [playAudio])
 
-  const handleMicToggle = async () => {
-    if (isRecording) {
-      stopRecording()
-    } else {
+  const handleStartRecording = async () => {
+    if (state === 'idle' && !isRecording) {
       await startRecording()
     }
   }
 
-  const handleFinalizeTranscript = () => {
-    if (currentTranscript) {
-      finalizeTranscript()
+  const handleStopRecording = () => {
+    if (isRecording) {
+      stopRecording()
+      sendEndOfSpeech()
     }
   }
 
@@ -169,11 +164,10 @@ export default function ConversationPage() {
               <div>
                 <p className="text-sm font-medium text-blue-900">상태</p>
                 <p className="text-sm text-blue-700">
-                  {isRecording
-                    ? '🎤 녹음 중...'
-                    : isAiSpeaking
-                    ? '🤖 AI가 말하는 중...'
-                    : '대기 중'}
+                  {state === 'disconnected' && '연결 중...'}
+                  {state === 'idle' && !isRecording && '대기 중'}
+                  {isRecording && '🎤 녹음 중...'}
+                  {state === 'processing' && '🤖 AI가 말하는 중...'}
                 </p>
               </div>
               {currentTranscript && (
@@ -183,6 +177,33 @@ export default function ConversationPage() {
               )}
             </div>
           </div>
+
+          {/* Waveform visualization */}
+          {isRecording && (
+            <div className="bg-gray-900 rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-center gap-1 h-16">
+                {Array.from({ length: 32 }).map((_, i) => {
+                  const barHeight = Math.max(
+                    4,
+                    Math.sin((i / 32) * Math.PI) * audioLevel * 60 + Math.random() * audioLevel * 20
+                  )
+                  return (
+                    <div
+                      key={i}
+                      className="bg-green-500 rounded-full transition-all duration-75"
+                      style={{
+                        width: '4px',
+                        height: `${barHeight}px`,
+                      }}
+                    />
+                  )
+                })}
+              </div>
+              <p className="text-center text-green-400 text-sm mt-2">
+                말씀하세요...
+              </p>
+            </div>
+          )}
 
           {/* Conversation messages */}
           <div className="border rounded-lg p-4 mb-6 h-96 overflow-y-auto bg-gray-50">
@@ -223,32 +244,31 @@ export default function ConversationPage() {
 
           {/* Controls */}
           <div className="flex gap-4">
-            <button
-              onClick={handleMicToggle}
-              disabled={!isConnected || isAiSpeaking}
-              className={`flex-1 py-4 rounded-lg font-semibold transition-colors ${
-                isRecording
-                  ? 'bg-red-600 hover:bg-red-700 text-white'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-300 disabled:cursor-not-allowed'
-              }`}
-            >
-              {isRecording ? '🎤 녹음 중지' : '🎤 녹음 시작'}
-            </button>
-
-            <button
-              onClick={handleFinalizeTranscript}
-              disabled={!currentTranscript || isAiSpeaking}
-              className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-              ✓ 답변 완료
-            </button>
+            {!isRecording ? (
+              <button
+                onClick={handleStartRecording}
+                disabled={state === 'disconnected' || state === 'processing'}
+                className="flex-1 py-4 rounded-lg font-semibold transition-colors bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                {state === 'disconnected' && '연결 중...'}
+                {state === 'idle' && '🎤 녹음 시작'}
+                {state === 'processing' && '⏳ 처리중...'}
+              </button>
+            ) : (
+              <button
+                onClick={handleStopRecording}
+                className="flex-1 py-4 rounded-lg font-semibold transition-colors bg-red-600 hover:bg-red-700 text-white animate-pulse"
+              >
+                ⏹️ 녹음 중지
+              </button>
+            )}
           </div>
 
           <div className="mt-6 bg-gray-50 rounded-lg p-4">
             <h3 className="font-semibold mb-2 text-sm">사용 방법:</h3>
             <ol className="space-y-1 text-gray-700 text-sm">
               <li>1. "녹음 시작" 버튼을 눌러 말하기 시작</li>
-              <li>2. 말이 끝나면 "답변 완료" 버튼 클릭</li>
+              <li>2. 말이 끝나면 "완료" 버튼 클릭</li>
               <li>3. AI가 응답을 생성하고 음성으로 답변</li>
             </ol>
           </div>

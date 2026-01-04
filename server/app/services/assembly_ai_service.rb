@@ -1,6 +1,6 @@
 class AssemblyAiService
-  ASSEMBLY_AI_API_KEY = ENV.fetch('ASSEMBLY_AI_API_KEY', 'test_key')
-  ASSEMBLY_AI_WS_URL = 'wss://api.assemblyai.com/v2/realtime/ws'
+  ASSEMBLY_AI_API_KEY = ENV.fetch("ASSEMBLY_AI_API_KEY", "test_key")
+  ASSEMBLY_AI_WS_URL = "wss://api.assemblyai.com/v2/realtime/ws"
 
   def initialize
     @connection = nil
@@ -10,8 +10,8 @@ class AssemblyAiService
 
   # Connect to AssemblyAI WebSocket
   def connect
-    require 'faye/websocket'
-    require 'eventmachine'
+    require "faye/websocket"
+    require "eventmachine"
 
     url = "#{ASSEMBLY_AI_WS_URL}?sample_rate=16000&token=#{ASSEMBLY_AI_API_KEY}"
 
@@ -44,9 +44,9 @@ class AssemblyAiService
     # Convert audio data to base64 if it's binary
     audio_base64 = if audio_data.is_a?(String) && audio_data.encoding == Encoding::BINARY
                      Base64.strict_encode64(audio_data)
-                   else
+    else
                      audio_data
-                   end
+    end
 
     message = { audio_data: audio_base64 }.to_json
     @connection.send(message)
@@ -73,16 +73,16 @@ class AssemblyAiService
   def handle_message(data)
     message = JSON.parse(data)
 
-    case message['message_type']
-    when 'PartialTranscript'
-      text = message['text']
+    case message["message_type"]
+    when "PartialTranscript"
+      text = message["text"]
       @on_transcript_callback&.call(text) if text && !text.empty?
-    when 'FinalTranscript'
-      text = message['text']
+    when "FinalTranscript"
+      text = message["text"]
       @on_final_transcript_callback&.call(text) if text && !text.empty?
-    when 'SessionBegins'
+    when "SessionBegins"
       Rails.logger.info "[AssemblyAI] Session started: #{message['session_id']}"
-    when 'SessionTerminated'
+    when "SessionTerminated"
       Rails.logger.info "[AssemblyAI] Session terminated"
     end
   rescue JSON::ParserError => e
