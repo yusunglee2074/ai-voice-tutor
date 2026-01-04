@@ -10,7 +10,7 @@ class MembershipType < ApplicationRecord
   validate :validate_features
 
   def features_list
-    JSON.parse(features || '[]')
+    JSON.parse(features || "[]")
   rescue JSON::ParserError
     []
   end
@@ -30,7 +30,7 @@ class MembershipType < ApplicationRecord
 
     parsed = features_list
     unless parsed.is_a?(Array)
-      errors.add(:features, 'must be an array')
+      errors.add(:features, "must be an array")
       return
     end
 

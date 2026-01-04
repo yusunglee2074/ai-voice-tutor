@@ -16,7 +16,7 @@ module Api
             membership_type: membership_type,
             valid_from: Time.current,
             valid_to: membership_type.duration_days.days.from_now,
-            status: 'active'
+            status: "active"
           )
 
           if @membership.save

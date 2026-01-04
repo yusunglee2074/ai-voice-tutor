@@ -4,25 +4,25 @@ Rails.application.routes.draw do
   get "up" => "rails/health#show", as: :rails_health_check
 
   # WebSocket endpoint for Action Cable
-  mount ActionCable.server => '/cable'
+  mount ActionCable.server => "/cable"
 
   namespace :api do
     namespace :v1 do
       # Mock Auth
-      post 'sessions', to: 'sessions#create'
-      get 'sessions/:id', to: 'sessions#show'
+      post "sessions", to: "sessions#create"
+      get "sessions/:id", to: "sessions#show"
 
       # Public APIs
-      resources :membership_types, only: [:index, :show]
+      resources :membership_types, only: [ :index, :show ]
       resources :users, only: [] do
-        resources :memberships, only: [:index], controller: 'user_memberships'
+        resources :memberships, only: [ :index ], controller: "user_memberships"
       end
 
       # Admin APIs
       namespace :admin do
-        resources :membership_types, only: [:index, :show, :create, :update, :destroy]
-        resources :users, only: [:index, :show] do
-          resources :memberships, only: [:index, :create, :destroy], controller: 'user_memberships'
+        resources :membership_types, only: [ :index, :show, :create, :update, :destroy ]
+        resources :users, only: [ :index, :show ] do
+          resources :memberships, only: [ :index, :create, :destroy ], controller: "user_memberships"
         end
       end
     end

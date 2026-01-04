@@ -15,7 +15,7 @@ module Api
             }
           }
         else
-          render json: { error: 'User not found' }, status: :not_found
+          render json: { error: "User not found" }, status: :not_found
         end
       end
 

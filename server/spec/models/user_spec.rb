@@ -49,7 +49,7 @@ RSpec.describe User, type: :model do
 
   describe '#has_feature?' do
     let(:user) { create(:user) }
-    let(:membership_type) { create(:membership_type, features: ['대화', '학습'].to_json) }
+    let(:membership_type) { create(:membership_type, features: [ '대화', '학습' ].to_json) }
 
     before do
       create(:user_membership, user: user, membership_type: membership_type)

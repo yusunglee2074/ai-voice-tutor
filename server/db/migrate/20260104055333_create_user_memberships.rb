@@ -10,7 +10,7 @@ class CreateUserMemberships < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :user_memberships, [:user_id, :status]
+    add_index :user_memberships, [ :user_id, :status ]
     add_index :user_memberships, :valid_to
   end
 end

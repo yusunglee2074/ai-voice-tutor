@@ -18,6 +18,9 @@ require "action_cable/engine"
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
+# Require custom middleware
+require_relative "../lib/voice_websocket_middleware"
+
 module Server
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.
@@ -40,5 +43,8 @@ module Server
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+
+    # Add raw WebSocket middleware
+    config.middleware.use VoiceWebsocketMiddleware
   end
 end

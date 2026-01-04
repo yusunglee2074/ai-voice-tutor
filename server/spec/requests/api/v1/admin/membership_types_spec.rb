@@ -1,7 +1,7 @@
 require 'rails_helper'
 
 RSpec.describe "Api::V1::Admin::MembershipTypes", type: :request do
-  let!(:membership_type) { create(:membership_type, name: 'Premium', features: ['대화', '학습'].to_json) }
+  let!(:membership_type) { create(:membership_type, name: 'Premium', features: [ '대화', '학습' ].to_json) }
 
   describe "GET /api/v1/admin/membership_types" do
     it "returns all membership types" do
@@ -22,7 +22,7 @@ RSpec.describe "Api::V1::Admin::MembershipTypes", type: :request do
       json = JSON.parse(response.body)
       expect(json['id']).to eq(membership_type.id)
       expect(json['name']).to eq('Premium')
-      expect(json['features']).to eq(['대화', '학습'])
+      expect(json['features']).to eq([ '대화', '학습' ])
     end
   end
 
@@ -31,7 +31,7 @@ RSpec.describe "Api::V1::Admin::MembershipTypes", type: :request do
       {
         membership_type: {
           name: 'Basic',
-          features: ['대화'],
+          features: [ '대화' ],
           duration_days: 30,
           price: 29000
         }
@@ -46,7 +46,7 @@ RSpec.describe "Api::V1::Admin::MembershipTypes", type: :request do
       expect(response).to have_http_status(:created)
       json = JSON.parse(response.body)
       expect(json['name']).to eq('Basic')
-      expect(json['features']).to eq(['대화'])
+      expect(json['features']).to eq([ '대화' ])
     end
 
     it "returns error for invalid params" do
@@ -61,7 +61,7 @@ RSpec.describe "Api::V1::Admin::MembershipTypes", type: :request do
       {
         membership_type: {
           name: 'Updated Premium',
-          features: ['대화', '학습', '분석'],
+          features: [ '대화', '학습', '분석' ],
           duration_days: 60,
           price: 99000
         }
@@ -74,7 +74,7 @@ RSpec.describe "Api::V1::Admin::MembershipTypes", type: :request do
       expect(response).to have_http_status(:success)
       json = JSON.parse(response.body)
       expect(json['name']).to eq('Updated Premium')
-      expect(json['features']).to eq(['대화', '학습', '분석'])
+      expect(json['features']).to eq([ '대화', '학습', '분석' ])
     end
   end
 

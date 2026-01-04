@@ -15,10 +15,10 @@ RSpec.describe MembershipType, type: :model do
   end
 
   describe '#features_list' do
-    let(:membership_type) { create(:membership_type, features: ['대화', '학습'].to_json) }
+    let(:membership_type) { create(:membership_type, features: [ '대화', '학습' ].to_json) }
 
     it 'returns parsed features array' do
-      expect(membership_type.features_list).to eq(['대화', '학습'])
+      expect(membership_type.features_list).to eq([ '대화', '학습' ])
     end
 
     context 'with invalid JSON' do
@@ -36,13 +36,13 @@ RSpec.describe MembershipType, type: :model do
     let(:membership_type) { create(:membership_type) }
 
     it 'sets features as JSON' do
-      membership_type.features_list = ['대화', '분석']
-      expect(membership_type.features).to eq(['대화', '분석'].to_json)
+      membership_type.features_list = [ '대화', '분석' ]
+      expect(membership_type.features).to eq([ '대화', '분석' ].to_json)
     end
   end
 
   describe '#has_feature?' do
-    let(:membership_type) { create(:membership_type, features: ['대화', '학습'].to_json) }
+    let(:membership_type) { create(:membership_type, features: [ '대화', '학습' ].to_json) }
 
     it 'returns true for included features' do
       expect(membership_type.has_feature?('대화')).to be true
@@ -55,12 +55,12 @@ RSpec.describe MembershipType, type: :model do
 
   describe 'feature validation' do
     it 'accepts valid features' do
-      membership_type = build(:membership_type, features: ['대화', '학습', '분석'].to_json)
+      membership_type = build(:membership_type, features: [ '대화', '학습', '분석' ].to_json)
       expect(membership_type).to be_valid
     end
 
     it 'rejects invalid features' do
-      membership_type = build(:membership_type, features: ['invalid', '대화'].to_json)
+      membership_type = build(:membership_type, features: [ 'invalid', '대화' ].to_json)
       expect(membership_type).not_to be_valid
       expect(membership_type.errors[:features]).to include(/contains invalid features/)
     end

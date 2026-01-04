@@ -8,7 +8,7 @@ module Api
           # Search by email or name
           if params[:q].present?
             query = "%#{params[:q]}%"
-            @users = @users.where('email LIKE ? OR name LIKE ?', query, query)
+            @users = @users.where("email LIKE ? OR name LIKE ?", query, query)
           end
 
           # Pagination

@@ -2,19 +2,19 @@
 puts "Creating membership types..."
 
 basic = MembershipType.find_or_create_by!(name: '베이직') do |mt|
-  mt.features = ['대화'].to_json
+  mt.features = [ '대화' ].to_json
   mt.duration_days = 30
   mt.price = 29000
 end
 
 standard = MembershipType.find_or_create_by!(name: '스탠다드') do |mt|
-  mt.features = ['학습', '대화'].to_json
+  mt.features = [ '학습', '대화' ].to_json
   mt.duration_days = 30
   mt.price = 49000
 end
 
 premium = MembershipType.find_or_create_by!(name: '프리미엄') do |mt|
-  mt.features = ['학습', '대화', '분석'].to_json
+  mt.features = [ '학습', '대화', '분석' ].to_json
   mt.duration_days = 30
   mt.price = 79000
 end
