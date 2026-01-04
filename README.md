@@ -15,11 +15,14 @@ make docker-down  # 컨테이너 중지
 ```
 
 ### 3. 관리자 정보 (Admin UI, seed 데이터 기준)
-- **주소**: http://localhost:3000/admin
+- **주소**: http://localhost:5174/admin
 - **계정**: admin@example.com / password123
 
 ### 4. 프론트 정보
-- **주소**: http://localhost:8080
+- **주소**: http://localhost:5174
+
+### 4. 백엔드 정보
+- **주소**: http://localhost:3000
 
 
 ### 5. 간략 구조도
