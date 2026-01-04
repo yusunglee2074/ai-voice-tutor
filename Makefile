@@ -10,7 +10,7 @@ help:
 # 로컬 실행 관련
 setup:
 	npm install
-	cd client && npm install
+	cd web && npm install
 	cd server && bundle install
 	cd server && bin/rails db:prepare db:seed
 

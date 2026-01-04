@@ -71,7 +71,7 @@ Ringle은 AI 튜터 기반 영어 학습 플랫폼입니다. 사용자가 AI와�
 ### membership_types (멤버십 유형)
 * id (기본 키)
 * name (멤버십 이름)
-* features (기능 목록, JSON 배열: ["학습", "대화", "분석"])
+* features (기능 목록, '["학습", "대화", "분석"]')
 * duration_days (유효 기간)
 * price (가격)
 * created_at (생성일시)
