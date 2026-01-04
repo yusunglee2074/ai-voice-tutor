@@ -1,0 +1,30 @@
+# --- OS & IDE ---
+.DS_Store
+.vscode/
+.idea/
+*.log
+
+# --- Root ---
+node_modules/
+.env
+
+# --- Client (Vite + React) ---
+client/node_modules/
+client/dist/
+client/.vite/
+client/.eslintcache
+
+# --- Server (Rails) ---
+server/log/*.log
+server/tmp/
+server/db/*.sqlite3
+server/db/*.sqlite3-journal
+server/storage/
+server/public/assets
+server/public/packs
+server/public/packs-test
+server/vendor/bundle/
+server/config/master.key
+
+# --- Docker ---
+.docker-data/
