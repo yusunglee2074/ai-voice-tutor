@@ -9,17 +9,8 @@ class VoiceSession
   end
 
   def start
-    @stt = AssemblyAiClient.new(sample_rate: 16000)
     @tts = CartesiaClient.new
     @llm = LlmService.new
-
-    # Setup STT event listeners
-    @stt.on_event do |event|
-      send_event(event)
-      if event[:type] == "stt_output"
-        @current_transcript = event[:transcript]
-      end
-    end
 
     # Setup TTS event listeners
     @tts.on_event { |event| send_event(event) }
@@ -30,29 +21,77 @@ class VoiceSession
 
   def handle_message(data)
     if data.is_a?(Array) || data.encoding == Encoding::BINARY
-      # Binary audio data
+      ensure_stt_connected
       @stt&.send_audio(data)
     else
       # JSON message
       begin
         msg = JSON.parse(data)
-        handle_end_of_speech if msg["type"] == "end_of_speech"
+        if msg["type"] == "end_of_speech"
+          handle_end_of_speech
+        elsif msg["type"] == "start_recording"
+          handle_start_recording
+        end
       rescue JSON::ParserError
         # Treat as binary if JSON parsing fails
+        ensure_stt_connected
         @stt&.send_audio(data)
       end
     end
   end
 
   def stop
-    @stt&.close
+    disconnect_stt
     @tts&.close
-    @stt = nil
     @tts = nil
     @llm = nil
   end
 
   private
+
+  def ensure_stt_connected
+    return if @stt
+
+    Rails.logger.info "[VoiceSession] Connecting to STT"
+    @stt = AssemblyAiClient.new(sample_rate: 16000)
+
+    # Setup STT event listeners
+    @stt.on_event do |event|
+      send_event(event)
+      if event[:type] == "stt_output"
+        @current_transcript = event[:transcript]
+      end
+    end
+  end
+
+  def disconnect_stt
+    return unless @stt
+
+    Rails.logger.info "[VoiceSession] Disconnecting STT"
+    @stt.close
+    @stt = nil
+    @current_transcript = ""
+  end
+
+  def handle_start_recording
+    # Reconnect STT when user starts recording
+    ensure_stt_connected
+    Rails.logger.info "[VoiceSession] Ready for recording"
+  end
+
+  def handle_end_of_speech
+    # Force STT to finalize current turn
+    @stt&.force_endpoint
+
+    # Wait briefly for final transcript, then process and disconnect
+    Thread.new do
+      sleep 0.5
+      process_llm(@current_transcript) if @current_transcript.present?
+
+      # Disconnect STT after processing
+      disconnect_stt
+    end
+  end
 
   def send_initial_greeting
     greeting = "Hello! I'm your AI English tutor. How can I help you practice English today?"
@@ -73,18 +112,6 @@ class VoiceSession
 
     # Add to conversation history
     @llm.add_message("assistant", greeting)
-  end
-
-  def handle_end_of_speech
-    # Force STT to finalize current turn
-    @stt&.force_endpoint
-
-    # Wait briefly for final transcript, then process
-    Thread.new do
-      sleep 0.5
-      process_llm(@current_transcript) if @current_transcript.present?
-      @current_transcript = ""
-    end
   end
 
   def process_llm(transcript)

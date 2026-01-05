@@ -83,19 +83,19 @@ class AssemblyAiClient
         # Handle ping/pong frames - these are text messages from the WebSocket library
         if msg.data.is_a?(String) && (msg.data == "keepalive ping timeout" || msg.data.include?("ping") || msg.data.include?("pong"))
           Rails.logger.debug "[AssemblyAI] Keepalive message: #{msg.data}"
-          return
+          next  # Use 'next' instead of 'return' in blocks
         end
 
         # Skip binary messages (actual ping frames)
         if msg.type == :binary || !msg.data.is_a?(String) || msg.data.empty?
           Rails.logger.debug "[AssemblyAI] Received binary/empty message, skipping"
-          return
+          next  # Use 'next' instead of 'return' in blocks
         end
 
         # Skip if it doesn't look like JSON
-        unless msg.data.strip.start_with?('{')
+        unless msg.data.strip.start_with?("{")
           Rails.logger.debug "[AssemblyAI] Non-JSON message: #{msg.data[0..50]}"
-          return
+          next  # Use 'next' instead of 'return' in blocks
         end
 
         data = JSON.parse(msg.data)
