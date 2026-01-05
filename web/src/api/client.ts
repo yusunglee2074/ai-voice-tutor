@@ -111,7 +111,7 @@ class ApiClient {
   }
 
   async adminDeleteMembershipType(id: number): Promise<void> {
-    await fetch(`${this.baseUrl}/admin/membership_types/${id}`, {
+    await this.request<void>(`/admin/membership_types/${id}`, {
       method: 'DELETE',
     });
   }
@@ -153,7 +153,7 @@ class ApiClient {
   }
 
   async adminRevokeMembership(userId: number, membershipId: number): Promise<void> {
-    await fetch(`${this.baseUrl}/admin/users/${userId}/memberships/${membershipId}`, {
+    await this.request<void>(`/admin/users/${userId}/memberships/${membershipId}`, {
       method: 'DELETE',
     });
   }

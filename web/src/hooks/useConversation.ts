@@ -118,7 +118,8 @@ export function useConversation(): UseConversationResult {
 
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const ws = new WebSocket(`${protocol}//localhost:3000/ws`)
+      const wsUrl = import.meta.env.VITE_WS_URL || `${protocol}//localhost:3000/ws`
+      const ws = new WebSocket(wsUrl)
       ws.binaryType = 'arraybuffer'
       wsRef.current = ws
 
