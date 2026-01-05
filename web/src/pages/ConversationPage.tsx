@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../hooks/useAuth'
 import { apiClient } from '../api/client'
 import { useConversation } from '../hooks/useConversation'
 import { useAudioCapture } from '../hooks/useAudioCapture'
 import { useAudioPlayer } from '../hooks/useAudioPlayer'
+import {
+  ConversationHeader,
+  MessageList,
+  RecordingControls,
+} from '../components/conversation'
 
 export default function ConversationPage() {
   const { user, isLoading: authLoading } = useAuth()
@@ -35,15 +40,12 @@ export default function ConversationPage() {
     error: conversationError,
   } = useConversation()
 
-  const isConnected = state !== 'disconnected'
-  const isAiSpeaking = state === 'processing'
-
   // Audio player hook
   const { playAudio } = useAudioPlayer()
 
   // Audio capture hook
   const {
-    isRecording,
+    isRecording: isCapturing,
     startRecording,
     stopRecording,
     error: audioError,
@@ -93,15 +95,21 @@ export default function ConversationPage() {
   }, [playAudio])
 
   const handleStartRecording = async () => {
-    if (state === 'idle' && !isRecording) {
+    if (state === 'idle' && !isCapturing) {
       await startRecording()
     }
   }
 
   const handleStopRecording = () => {
-    if (isRecording) {
+    if (isCapturing) {
       stopRecording()
       sendEndOfSpeech()
+    }
+  }
+
+  const handleCancel = () => {
+    if (isCapturing) {
+      stopRecording()
     }
   }
 
@@ -120,160 +128,23 @@ export default function ConversationPage() {
   const error = conversationError || audioError
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link to="/" className="text-2xl font-bold text-blue-600">
-            Ringle
-          </Link>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div
-                className={`w-3 h-3 rounded-full ${
-                  isConnected ? 'bg-green-500' : 'bg-red-500'
-                }`}
-              />
-              <span className="text-sm text-gray-600">
-                {isConnected ? '연결됨' : '연결 끊김'}
-              </span>
-            </div>
-            <span className="text-gray-700">{user.name}</span>
-            <Link
-              to="/"
-              className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
-            >
-              홈으로
-            </Link>
-          </div>
-        </div>
-      </nav>
+    <div className="flex flex-col h-screen bg-gray-50 font-sans">
+      <ConversationHeader onBack={() => navigate(-1)} />
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h1 className="text-3xl font-bold mb-4">AI와 대화하기</h1>
+      <MessageList
+        messages={messages}
+        currentTranscript={currentTranscript}
+        error={error}
+      />
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <p className="text-red-800">{error}</p>
-            </div>
-          )}
-
-          {/* Status indicator */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-blue-900">상태</p>
-                <p className="text-sm text-blue-700">
-                  {state === 'disconnected' && '연결 중...'}
-                  {state === 'idle' && !isRecording && '대기 중'}
-                  {isRecording && '🎤 녹음 중...'}
-                  {state === 'processing' && '🤖 AI가 말하는 중...'}
-                </p>
-              </div>
-              {currentTranscript && (
-                <div className="text-sm text-blue-700">
-                  인식 중: "{currentTranscript}"
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Waveform visualization */}
-          {isRecording && (
-            <div className="bg-gray-900 rounded-lg p-4 mb-6">
-              <div className="flex items-center justify-center gap-1 h-16">
-                {Array.from({ length: 32 }).map((_, i) => {
-                  const barHeight = Math.max(
-                    4,
-                    Math.sin((i / 32) * Math.PI) * audioLevel * 60 + Math.random() * audioLevel * 20
-                  )
-                  return (
-                    <div
-                      key={i}
-                      className="bg-green-500 rounded-full transition-all duration-75"
-                      style={{
-                        width: '4px',
-                        height: `${barHeight}px`,
-                      }}
-                    />
-                  )
-                })}
-              </div>
-              <p className="text-center text-green-400 text-sm mt-2">
-                말씀하세요...
-              </p>
-            </div>
-          )}
-
-          {/* Conversation messages */}
-          <div className="border rounded-lg p-4 mb-6 h-96 overflow-y-auto bg-gray-50">
-            {messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-gray-500">
-                대화를 시작하려면 마이크 버튼을 눌러주세요
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {messages.map((message, index) => (
-                  <div
-                    key={index}
-                    className={`flex ${
-                      message.role === 'user' ? 'justify-end' : 'justify-start'
-                    }`}
-                  >
-                    <div
-                      className={`max-w-[70%] rounded-lg p-3 ${
-                        message.role === 'user'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white border border-gray-200'
-                      }`}
-                    >
-                      <p className="text-sm">{message.content}</p>
-                      <p
-                        className={`text-xs mt-1 ${
-                          message.role === 'user' ? 'text-blue-100' : 'text-gray-500'
-                        }`}
-                      >
-                        {new Date(message.timestamp).toLocaleTimeString('ko-KR')}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Controls */}
-          <div className="flex gap-4">
-            {!isRecording ? (
-              <button
-                onClick={handleStartRecording}
-                disabled={state === 'disconnected' || state === 'processing'}
-                className="flex-1 py-4 rounded-lg font-semibold transition-colors bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                {state === 'disconnected' && '연결 중...'}
-                {state === 'idle' && '🎤 녹음 시작'}
-                {state === 'processing' && '⏳ 처리중...'}
-              </button>
-            ) : (
-              <button
-                onClick={handleStopRecording}
-                className="flex-1 py-4 rounded-lg font-semibold transition-colors bg-red-600 hover:bg-red-700 text-white animate-pulse"
-              >
-                ⏹️ 녹음 중지
-              </button>
-            )}
-          </div>
-
-          <div className="mt-6 bg-gray-50 rounded-lg p-4">
-            <h3 className="font-semibold mb-2 text-sm">사용 방법:</h3>
-            <ol className="space-y-1 text-gray-700 text-sm">
-              <li>1. "녹음 시작" 버튼을 눌러 말하기 시작</li>
-              <li>2. 말이 끝나면 "완료" 버튼 클릭</li>
-              <li>3. AI가 응답을 생성하고 음성으로 답변</li>
-            </ol>
-          </div>
-        </div>
-      </div>
+      <RecordingControls
+        isRecording={isCapturing}
+        state={state}
+        audioLevel={audioLevel}
+        onStartRecording={handleStartRecording}
+        onStopRecording={handleStopRecording}
+        onCancel={handleCancel}
+      />
     </div>
   )
 }

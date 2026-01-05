@@ -40,7 +40,7 @@ export function useConversation(): UseConversationResult {
   const currentAssistantMessageRef = useRef('')
 
   // Use ref to avoid stale closure in WebSocket callbacks
-  const handleServerEventRef = useRef<(data: ServerEvent) => void>(() => {})
+  const handleServerEventRef = useRef<(data: ServerEvent) => void>(() => { })
 
   handleServerEventRef.current = (data: ServerEvent) => {
     console.log('[WebSocket] Received event:', data.type, data)
