@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
-import { render } from '../test/test-utils'
+import { renderWithoutAuth } from '../test/test-utils'
 import MembershipsPage from './MembershipsPage'
 import * as authHook from '../hooks/useAuth'
 import { apiClient } from '../api/client'
@@ -12,13 +12,9 @@ vi.mock('../api/client', () => ({
   },
 }))
 
-vi.mock('../hooks/useAuth', async () => {
-  const actual = await vi.importActual('../hooks/useAuth')
-  return {
-    ...actual,
-    useAuth: vi.fn(),
-  }
-})
+vi.mock('../hooks/useAuth', () => ({
+  useAuth: vi.fn(),
+}))
 
 describe('MembershipsPage', () => {
   beforeEach(() => {
@@ -37,7 +33,7 @@ describe('MembershipsPage', () => {
     })
 
     it('shows login required message', async () => {
-      render(<MembershipsPage />)
+      renderWithoutAuth(<MembershipsPage />)
 
       await waitFor(() => {
         expect(screen.getByText('로그인이 필요합니다.')).toBeInTheDocument()
@@ -91,7 +87,7 @@ describe('MembershipsPage', () => {
     it('renders page title', async () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue([])
 
-      render(<MembershipsPage />)
+      renderWithoutAuth(<MembershipsPage />)
 
       await waitFor(() => {
         expect(screen.getByText('멤버십 플랜')).toBeInTheDocument()
@@ -101,7 +97,7 @@ describe('MembershipsPage', () => {
     it('displays all membership types', async () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue([])
 
-      render(<MembershipsPage />)
+      renderWithoutAuth(<MembershipsPage />)
 
       await waitFor(() => {
         expect(screen.getByText('Basic')).toBeInTheDocument()
@@ -113,7 +109,7 @@ describe('MembershipsPage', () => {
     it('displays membership prices', async () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue([])
 
-      render(<MembershipsPage />)
+      renderWithoutAuth(<MembershipsPage />)
 
       await waitFor(() => {
         expect(screen.getByText('₩29,000')).toBeInTheDocument()
@@ -140,7 +136,7 @@ describe('MembershipsPage', () => {
 
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue(mockMemberships)
 
-      render(<MembershipsPage />)
+      renderWithoutAuth(<MembershipsPage />)
 
       await waitFor(() => {
         expect(screen.getByText('현재 멤버십')).toBeInTheDocument()
@@ -153,7 +149,7 @@ describe('MembershipsPage', () => {
     it('shows info section with guidance', async () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue([])
 
-      render(<MembershipsPage />)
+      renderWithoutAuth(<MembershipsPage />)
 
       await waitFor(() => {
         expect(screen.getByText('💡 안내사항')).toBeInTheDocument()
@@ -164,7 +160,7 @@ describe('MembershipsPage', () => {
     it('has link to admin page', async () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue([])
 
-      render(<MembershipsPage />)
+      renderWithoutAuth(<MembershipsPage />)
 
       await waitFor(() => {
         expect(screen.getByRole('link', { name: '관리자 페이지로 이동' })).toBeInTheDocument()
@@ -174,7 +170,7 @@ describe('MembershipsPage', () => {
     it('displays features for each membership type', async () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue([])
 
-      render(<MembershipsPage />)
+      renderWithoutAuth(<MembershipsPage />)
 
       await waitFor(() => {
         expect(screen.getAllByText('학습').length).toBeGreaterThan(0)
@@ -193,7 +189,7 @@ describe('MembershipsPage', () => {
         isLoading: true,
       })
 
-      render(<MembershipsPage />)
+      renderWithoutAuth(<MembershipsPage />)
 
       expect(screen.getByText('로딩 중...')).toBeInTheDocument()
     })

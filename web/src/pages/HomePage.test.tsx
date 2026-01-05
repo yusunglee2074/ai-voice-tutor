@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { render } from '../test/test-utils'
+import { renderWithoutAuth } from '../test/test-utils'
 import HomePage from './HomePage'
 import * as authHook from '../hooks/useAuth'
 import { apiClient } from '../api/client'
@@ -14,13 +14,9 @@ vi.mock('../api/client', () => ({
   },
 }))
 
-vi.mock('../hooks/useAuth', async () => {
-  const actual = await vi.importActual('../hooks/useAuth')
-  return {
-    ...actual,
-    useAuth: vi.fn(),
-  }
-})
+vi.mock('../hooks/useAuth', () => ({
+  useAuth: vi.fn(),
+}))
 
 describe('HomePage', () => {
   beforeEach(() => {
@@ -39,7 +35,7 @@ describe('HomePage', () => {
     })
 
     it('renders login form', async () => {
-      render(<HomePage />)
+      renderWithoutAuth(<HomePage />)
 
       await waitFor(() => {
         expect(screen.getByText('Ringle')).toBeInTheDocument()
@@ -50,7 +46,7 @@ describe('HomePage', () => {
     })
 
     it('shows test account information', () => {
-      render(<HomePage />)
+      renderWithoutAuth(<HomePage />)
 
       expect(screen.getByText('테스트 계정:')).toBeInTheDocument()
       expect(screen.getByText(/user1@example.com/)).toBeInTheDocument()
@@ -68,7 +64,7 @@ describe('HomePage', () => {
       })
       vi.mocked(apiClient.getMembershipTypes).mockResolvedValue([])
 
-      render(<HomePage />)
+      renderWithoutAuth(<HomePage />)
 
       await waitFor(() => {
         expect(screen.getByPlaceholderText('user1@example.com')).toBeInTheDocument()
@@ -108,7 +104,7 @@ describe('HomePage', () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue([])
       vi.mocked(apiClient.getMembershipTypes).mockResolvedValue([])
 
-      render(<HomePage />)
+      renderWithoutAuth(<HomePage />)
 
       expect(screen.getByText(`안녕하세요, ${mockUser.name}님!`)).toBeInTheDocument()
     })
@@ -117,7 +113,7 @@ describe('HomePage', () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue([])
       vi.mocked(apiClient.getMembershipTypes).mockResolvedValue([])
 
-      render(<HomePage />)
+      renderWithoutAuth(<HomePage />)
 
       expect(screen.getByRole('button', { name: '로그아웃' })).toBeInTheDocument()
     })
@@ -141,7 +137,7 @@ describe('HomePage', () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue(mockMemberships)
       vi.mocked(apiClient.getMembershipTypes).mockResolvedValue([])
 
-      render(<HomePage />)
+      renderWithoutAuth(<HomePage />)
 
       await waitFor(() => {
         expect(screen.getByText('Premium')).toBeInTheDocument()
@@ -153,7 +149,7 @@ describe('HomePage', () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue([])
       vi.mocked(apiClient.getMembershipTypes).mockResolvedValue([])
 
-      render(<HomePage />)
+      renderWithoutAuth(<HomePage />)
 
       await waitFor(() => {
         expect(screen.getByText('활성화된 멤버십이 없습니다.')).toBeInTheDocument()
@@ -165,7 +161,7 @@ describe('HomePage', () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue([])
       vi.mocked(apiClient.getMembershipTypes).mockResolvedValue([])
 
-      render(<HomePage />)
+      renderWithoutAuth(<HomePage />)
 
       await waitFor(() => {
         const conversationButton = screen.getByRole('button', { name: /AI와 대화하기/i })
@@ -192,7 +188,7 @@ describe('HomePage', () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue(mockMemberships)
       vi.mocked(apiClient.getMembershipTypes).mockResolvedValue([])
 
-      render(<HomePage />)
+      renderWithoutAuth(<HomePage />)
 
       await waitFor(() => {
         const conversationButton = screen.getByRole('button', { name: /AI와 대화하기/i })
@@ -210,7 +206,7 @@ describe('HomePage', () => {
         isLoading: true,
       })
 
-      render(<HomePage />)
+      renderWithoutAuth(<HomePage />)
 
       expect(screen.getByText('로딩 중...')).toBeInTheDocument()
     })

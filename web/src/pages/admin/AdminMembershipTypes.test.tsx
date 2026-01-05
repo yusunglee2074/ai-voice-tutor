@@ -11,6 +11,8 @@ vi.mock('../../api/client', () => ({
     adminCreateMembershipType: vi.fn(),
     adminUpdateMembershipType: vi.fn(),
     adminDeleteMembershipType: vi.fn(),
+    login: vi.fn(),
+    getUser: vi.fn(),
   },
 }))
 
@@ -35,6 +37,12 @@ describe('AdminMembershipTypes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(apiClient.adminGetMembershipTypes).mockResolvedValue(mockMembershipTypes)
+    vi.mocked(apiClient.login).mockResolvedValue({
+      user: { id: 1, email: 'admin@example.com', name: 'Admin', has_active_membership: true }
+    })
+    vi.mocked(apiClient.getUser).mockResolvedValue({
+      user: { id: 1, email: 'admin@example.com', name: 'Admin', has_active_membership: true }
+    })
   })
 
   it('renders page title', async () => {

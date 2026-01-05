@@ -8,6 +8,8 @@ import { apiClient } from '../../api/client'
 vi.mock('../../api/client', () => ({
   apiClient: {
     adminGetUsers: vi.fn(),
+    login: vi.fn(),
+    getUser: vi.fn(),
   },
 }))
 
@@ -38,6 +40,12 @@ describe('AdminUsers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(apiClient.adminGetUsers).mockResolvedValue(mockUsersResponse)
+    vi.mocked(apiClient.login).mockResolvedValue({
+      user: { id: 1, email: 'admin@example.com', name: 'Admin', has_active_membership: true }
+    })
+    vi.mocked(apiClient.getUser).mockResolvedValue({
+      user: { id: 1, email: 'admin@example.com', name: 'Admin', has_active_membership: true }
+    })
   })
 
   it('renders page title', async () => {
