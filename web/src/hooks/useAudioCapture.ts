@@ -22,23 +22,30 @@ export function useAudioCapture({ onAudioData }: AudioCaptureHookProps): AudioCa
   const analyserRef = useRef<AnalyserNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  const isRecordingRef = useRef(false)
 
   const updateAudioLevel = useCallback(() => {
     if (!analyserRef.current) return
 
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
-    analyserRef.current.getByteFrequencyData(dataArray)
+    analyserRef.current.getByteTimeDomainData(dataArray)
 
-    // Calculate average level
-    const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length
-    const normalizedLevel = Math.min(average / 128, 1) // Normalize to 0-1
+    // Calculate RMS (Root Mean Square) for more accurate volume
+    let sum = 0
+    for (let i = 0; i < dataArray.length; i++) {
+      const normalized = (dataArray[i] - 128) / 128
+      sum += normalized * normalized
+    }
+    const rms = Math.sqrt(sum / dataArray.length)
+    const normalizedLevel = Math.min(rms * 3, 1) // Amplify and normalize to 0-1
 
     setAudioLevel(normalizedLevel)
 
-    if (isRecording) {
+    // Use ref to avoid stale closure - state would capture old value
+    if (isRecordingRef.current) {
       animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
     }
-  }, [isRecording])
+  }, [])
 
   const startRecording = useCallback(async () => {
     try {
@@ -70,7 +77,8 @@ export function useAudioCapture({ onAudioData }: AudioCaptureHookProps): AudioCa
 
       // Create analyser for visualization
       const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 256
+      analyser.fftSize = 2048
+      analyser.smoothingTimeConstant = 0.8
       analyserRef.current = analyser
 
       // Handle messages from worklet
@@ -89,6 +97,7 @@ export function useAudioCapture({ onAudioData }: AudioCaptureHookProps): AudioCa
       // workletNode.connect(audioContext.destination)
 
       setIsRecording(true)
+      isRecordingRef.current = true
 
       // Start audio level monitoring
       animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
@@ -103,6 +112,9 @@ export function useAudioCapture({ onAudioData }: AudioCaptureHookProps): AudioCa
 
   const stopRecording = useCallback(() => {
     console.log('[AudioCapture] Stopping recording')
+
+    // Stop the animation loop first
+    isRecordingRef.current = false
 
     // Cancel animation frame
     if (animationFrameRef.current) {

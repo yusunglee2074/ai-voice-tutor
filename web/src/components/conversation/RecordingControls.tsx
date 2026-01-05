@@ -17,6 +17,18 @@ export function RecordingControls({
   onStopRecording,
   onCancel,
 }: RecordingControlsProps) {
+  // Generate random variations for each bar to create more natural waveform
+  const barHeights = Array.from({ length: 20 }).map((_, i) => {
+    // Create a wave pattern with some randomness
+    const baseHeight = Math.sin((i / 20) * Math.PI * 2) * 0.5 + 0.5
+    const randomFactor = Math.sin(Date.now() / 200 + i) * 0.3 + 0.7
+    const audioFactor = audioLevel * 2 // Amplify audio level for better visibility
+
+    // Calculate height: minimum 20%, maximum 100%
+    const height = Math.max(0.2, Math.min(1, baseHeight * randomFactor * audioFactor))
+    return height * 100
+  })
+
   return (
     <div className="px-6 py-6 flex flex-col items-center justify-center min-h-[160px]">
       {!isRecording ? (
@@ -33,23 +45,17 @@ export function RecordingControls({
       ) : (
         <div className="w-full flex flex-col items-center">
           {/* Waveform Visualization */}
-          <div className="flex items-center justify-center gap-1.5 h-12 mb-8">
-            {Array.from({ length: 7 }).map((_, i) => {
-              const height = Math.max(
-                24,
-                Math.min(
-                  48,
-                  24 + Math.sin((i / 7) * Math.PI) * audioLevel * 100
-                )
-              )
-              return (
-                <div
-                  key={i}
-                  className="w-1.5 bg-violet-500 rounded-sm transition-all duration-75"
-                  style={{ height: `${height}px` }}
-                />
-              )
-            })}
+          <div className="flex items-center justify-center gap-1 h-16 mb-6">
+            {barHeights.map((height, i) => (
+              <div
+                key={i}
+                className="w-1 bg-violet-500 rounded-full transition-all duration-100 ease-out"
+                style={{
+                  height: `${height}%`,
+                  opacity: 0.6 + (audioLevel * 0.4)
+                }}
+              />
+            ))}
           </div>
 
           <div className="flex gap-4 w-full">
