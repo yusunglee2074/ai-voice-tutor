@@ -37,6 +37,7 @@ export default function ConversationPage() {
     disconnect,
     sendAudio,
     sendEndOfSpeech,
+    sendStartRecording,
     error: conversationError,
   } = useConversation()
 
@@ -96,6 +97,8 @@ export default function ConversationPage() {
 
   const handleStartRecording = async () => {
     if (state === 'idle' && !isCapturing) {
+      // Send start_recording event to reconnect STT
+      sendStartRecording()
       await startRecording()
     }
   }

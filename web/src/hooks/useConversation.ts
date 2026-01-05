@@ -26,6 +26,7 @@ interface UseConversationResult {
   disconnect: () => void
   sendAudio: (audioData: ArrayBuffer) => void
   sendEndOfSpeech: () => void
+  sendStartRecording: () => void
   error: string | null
 }
 
@@ -194,6 +195,17 @@ export function useConversation(): UseConversationResult {
     setState('processing')
   }, [currentTranscript])
 
+  const sendStartRecording = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('[WebSocket] Cannot send start_recording: not connected')
+      return
+    }
+
+    // Send JSON message to reconnect STT
+    wsRef.current.send(JSON.stringify({ type: 'start_recording' }))
+    console.log('[WebSocket] Sent start_recording event')
+  }, [])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -214,6 +226,7 @@ export function useConversation(): UseConversationResult {
     disconnect,
     sendAudio,
     sendEndOfSpeech,
+    sendStartRecording,
     error,
   }
 }
