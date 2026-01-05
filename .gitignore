@@ -6,7 +6,6 @@
 
 # --- Root ---
 node_modules/
-.env
 
 # --- Client (Vite + React) ---
 web/node_modules/
