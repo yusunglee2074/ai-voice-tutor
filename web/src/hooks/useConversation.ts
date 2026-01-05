@@ -64,21 +64,23 @@ export function useConversation(): UseConversationResult {
         }
         break
 
-      case 'llm_end':
-        if (currentAssistantMessageRef.current) {
+      case 'llm_end': {
+        const finalMessage = currentAssistantMessageRef.current
+        currentAssistantMessageRef.current = ''
+
+        if (finalMessage) {
           setMessages((prev) => [
             ...prev,
             {
               role: 'assistant',
-              content: currentAssistantMessageRef.current,
+              content: finalMessage,
               timestamp: Date.now(),
             },
           ])
-          currentAssistantMessageRef.current = ''
         }
         setState('idle')
         break
-
+      }
       case 'tts_chunk':
         if (data.audio) {
           window.dispatchEvent(

@@ -7,7 +7,6 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages, currentTranscript, error }: MessageListProps) {
-  console.log({ messages })
   return (
     <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
       {error && (
@@ -43,11 +42,6 @@ export function MessageList({ messages, currentTranscript, error }: MessageListP
                 <p className="mb-3 font-medium leading-relaxed text-[15px] text-gray-900">
                   {message.content}
                 </p>
-                <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-                  <button className="bg-transparent border-none cursor-pointer text-base text-gray-500">
-                    🔊
-                  </button>
-                </div>
               </div>
             </div>
           )
