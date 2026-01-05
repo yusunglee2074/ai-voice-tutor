@@ -15,7 +15,6 @@ import {
 export default function ConversationPage() {
   const { user, isLoading: authLoading } = useAuth()
   const navigate = useNavigate()
-  const [isInitialized, setIsInitialized] = useState(false)
 
   const { data: memberships, isLoading: membershipsLoading } = useQuery({
     queryKey: ['userMemberships', user?.id],
@@ -62,32 +61,30 @@ export default function ConversationPage() {
   }, [authLoading, user, navigate])
 
   useEffect(() => {
-    if (!membershipsLoading && !hasActiveMembership) {
-      alert('활성화된 멤버십이 없습니다. 멤버십을 구매해주세요.')
+    if (!membershipsLoading && memberships && !hasActiveMembership) {
       navigate('/memberships')
     }
-  }, [membershipsLoading, hasActiveMembership, navigate])
+  }, [membershipsLoading, memberships, hasActiveMembership, navigate])
 
   useEffect(() => {
-    if (!membershipsLoading && hasActiveMembership && !hasConversationFeature) {
+    if (!membershipsLoading && memberships && hasActiveMembership && !hasConversationFeature) {
       alert('대화 기능이 포함된 멤버십이 필요합니다.')
       navigate('/')
     }
-  }, [membershipsLoading, hasActiveMembership, hasConversationFeature, navigate])
+  }, [membershipsLoading, memberships, hasActiveMembership, hasConversationFeature, navigate])
 
-  // Initialize WebSocket connection
   useEffect(() => {
-    if (user && hasActiveMembership && hasConversationFeature && !isInitialized) {
+    if (user && hasActiveMembership && hasConversationFeature) {
       connect()
-      setIsInitialized(true)
     }
+  }, [user, hasActiveMembership, hasConversationFeature, connect])
 
+  // Cleanup on actual unmount (page navigation)
+  useEffect(() => {
     return () => {
-      if (isInitialized) {
-        disconnect()
-      }
+      disconnect()
     }
-  }, [user, hasActiveMembership, hasConversationFeature, isInitialized, connect, disconnect])
+  }, [disconnect])
 
   // Handle audio playback from TTS
   useEffect(() => {

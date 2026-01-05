@@ -26,7 +26,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         .finally(() => setIsLoading(false))
     } else {
-      setIsLoading(false)
+      // Auto-login with default user for development
+      apiClient
+        .login('user1@example.com')
+        .then((response) => {
+          setUser(response.user)
+          localStorage.setItem('userId', response.user.id.toString())
+        })
+        .catch(() => {
+          // Ignore login failure
+        })
+        .finally(() => setIsLoading(false))
     }
   }, [])
 

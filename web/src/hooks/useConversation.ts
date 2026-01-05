@@ -39,6 +39,7 @@ export function useConversation(): UseConversationResult {
 
   const wsRef = useRef<WebSocket | null>(null)
   const currentAssistantMessageRef = useRef('')
+  const intentionalDisconnectRef = useRef(false)
 
   // Use ref to avoid stale closure in WebSocket callbacks
   const handleServerEventRef = useRef<(data: ServerEvent) => void>(() => { })
@@ -112,6 +113,9 @@ export function useConversation(): UseConversationResult {
       return
     }
 
+    // Reset intentional disconnect flag when connecting
+    intentionalDisconnectRef.current = false
+
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       const ws = new WebSocket(`${protocol}//localhost:3000/ws`)
@@ -134,12 +138,19 @@ export function useConversation(): UseConversationResult {
       }
 
       ws.onerror = (event) => {
+        if (intentionalDisconnectRef.current || wsRef.current !== ws) {
+          return
+        }
         console.error('[WebSocket] Error:', event)
         setError('WebSocket connection error')
         setState('disconnected')
       }
 
       ws.onclose = (event) => {
+        // Only update state if this is still the current WebSocket
+        if (wsRef.current !== ws && !intentionalDisconnectRef.current) {
+          return
+        }
         console.log('[WebSocket] Disconnected:', event.code, event.reason)
         setState('disconnected')
       }
@@ -151,6 +162,8 @@ export function useConversation(): UseConversationResult {
   }, [user])
 
   const disconnect = useCallback(() => {
+    // Mark as intentional disconnect to suppress error messages
+    intentionalDisconnectRef.current = true
     if (wsRef.current) {
       wsRef.current.close()
       wsRef.current = null
@@ -209,7 +222,8 @@ export function useConversation(): UseConversationResult {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      // Small delay to handle React StrictMode double-invocation
+      // Mark as intentional disconnect for cleanup
+      intentionalDisconnectRef.current = true
       const ws = wsRef.current
       if (ws) {
         wsRef.current = null
