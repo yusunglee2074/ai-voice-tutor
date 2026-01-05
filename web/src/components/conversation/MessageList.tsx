@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { ConversationMessage } from './types'
 
 interface MessageListProps {
@@ -7,6 +8,12 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages, currentTranscript, error }: MessageListProps) {
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, currentTranscript])
+
   return (
     <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
       {error && (
@@ -58,6 +65,9 @@ export function MessageList({ messages, currentTranscript, error }: MessageListP
           </div>
         </div>
       )}
+
+      {/* Scroll anchor */}
+      <div ref={bottomRef} />
     </div>
   )
 }
