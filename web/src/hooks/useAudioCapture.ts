@@ -84,8 +84,28 @@ export function useAudioCapture({ onAudioData }: AudioCaptureHookProps): AudioCa
       // Handle messages from worklet
       workletNode.port.onmessage = (event) => {
         if (event.data.type === 'audio') {
-          console.log('[AudioCapture] Sending audio data:', event.data.data.byteLength, 'bytes')
-          onAudioData(event.data.data)
+          const audioBuffer = event.data.data as ArrayBuffer
+          const samples = new Int16Array(audioBuffer)
+
+          // Check if audio is silent (max amplitude below threshold)
+          // 16-bit PCM range: -32768 to 32767
+          // Threshold 10 is very conservative (0.03% of max)
+          const SILENCE_THRESHOLD = 10
+          let maxLevel = 0
+          for (let i = 0; i < samples.length; i++) {
+            const absValue = Math.abs(samples[i])
+            if (absValue > maxLevel) {
+              maxLevel = absValue
+            }
+          }
+
+          if (maxLevel < SILENCE_THRESHOLD) {
+            // Skip sending silent audio to reduce server traffic
+            return
+          }
+
+          console.log('[AudioCapture] Sending audio data:', audioBuffer.byteLength, 'bytes, level:', maxLevel)
+          onAudioData(audioBuffer)
         }
       }
 
