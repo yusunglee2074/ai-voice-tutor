@@ -92,20 +92,23 @@ class VoiceSession
 
     assistant_response = ""
 
-    # Stream LLM response
+    # Stream LLM response (text only, no TTS yet)
     @llm.stream_response(transcript) do |text_chunk|
       assistant_response += text_chunk
-
       send_event(type: "llm_chunk", text: text_chunk)
-
-      # Send to TTS for streaming audio generation
-      @tts.send_text(text_chunk)
     end
 
     # Add to conversation history
     @llm.add_message("assistant", assistant_response)
 
+    # Send llm_end event
     send_event(type: "llm_end")
+
+    # Generate TTS for complete response
+    if assistant_response.present?
+      @tts.send_text(assistant_response)
+      Rails.logger.info "[VoiceSession] Sent complete response to TTS: #{assistant_response[0..50]}..."
+    end
   rescue => e
     Rails.logger.error "[VoiceSession] Error processing LLM: #{e.message}"
     Rails.logger.error e.backtrace.join("\n")
