@@ -8,22 +8,32 @@ class AssemblyAiClient
     @callbacks = []
     @mutex = Mutex.new
     @sample_rate = sample_rate
+    @closed = false
     connect
   end
 
   def send_audio(bytes)
+    return if @closed
     return unless @ws&.open?
-    @ws.send(bytes, type: :binary)
-  rescue Errno::EPIPE, IOError => e
-    Rails.logger.warn "[AssemblyAI] Send failed (connection closed): #{e.message}"
-    @ws = nil
+    begin
+      @ws.send(bytes, type: :binary)
+    rescue Errno::EPIPE, IOError => e
+      Rails.logger.warn "[AssemblyAI] Send failed (connection closed): #{e.message}"
+      handle_disconnect
+    end
   end
 
   # AssemblyAI v3: Force endpoint to finalize current turn
   def force_endpoint
+    return if @closed
     return unless @ws&.open?
-    @ws.send({ type: "ForceEndpoint" }.to_json)
-    Rails.logger.debug "[AssemblyAI] Sent ForceEndpoint"
+    begin
+      @ws.send({ type: "ForceEndpoint" }.to_json)
+      Rails.logger.debug "[AssemblyAI] Sent ForceEndpoint"
+    rescue Errno::EPIPE, IOError => e
+      Rails.logger.warn "[AssemblyAI] ForceEndpoint failed: #{e.message}"
+      handle_disconnect
+    end
   end
 
   def on_event(&block)
@@ -31,12 +41,19 @@ class AssemblyAiClient
   end
 
   def close
+    @closed = true
     return unless @ws
-    if @ws.open?
-      @ws.send({ type: "Terminate" }.to_json) rescue nil
+    begin
+      if @ws.open?
+        @ws.send({ type: "Terminate" }.to_json)
+        sleep 0.1 # Give time for graceful termination
+      end
+    rescue => e
+      Rails.logger.debug "[AssemblyAI] Error during close: #{e.message}"
+    ensure
+      @ws.close rescue nil
+      @ws = nil
     end
-    @ws.close rescue nil
-    @ws = nil
   end
 
   private
@@ -62,26 +79,37 @@ class AssemblyAiClient
     end
 
     @ws.on :message do |msg|
-      # Skip binary messages (ping frames, etc.)
-      if msg.type == :binary || !msg.data.is_a?(String) || msg.data.empty?
-        Rails.logger.debug "[AssemblyAI] Received binary/empty message, skipping"
-        return
+      begin
+        # Handle ping/pong frames - these are text messages from the WebSocket library
+        if msg.data.is_a?(String) && (msg.data == "keepalive ping timeout" || msg.data.include?("ping") || msg.data.include?("pong"))
+          Rails.logger.debug "[AssemblyAI] Keepalive message: #{msg.data}"
+          return
+        end
+
+        # Skip binary messages (actual ping frames)
+        if msg.type == :binary || !msg.data.is_a?(String) || msg.data.empty?
+          Rails.logger.debug "[AssemblyAI] Received binary/empty message, skipping"
+          return
+        end
+
+        # Skip if it doesn't look like JSON
+        unless msg.data.strip.start_with?('{')
+          Rails.logger.debug "[AssemblyAI] Non-JSON message: #{msg.data[0..50]}"
+          return
+        end
+
+        data = JSON.parse(msg.data)
+        client.send(:handle, data)
+      rescue JSON::ParserError => e
+        Rails.logger.warn "[AssemblyAI] JSON parse error: #{e.message}, data: #{msg.data[0..100]}"
+      rescue => e
+        Rails.logger.error "[AssemblyAI] Message handler error: #{e.class} - #{e.message}"
       end
-      
-      # Skip if it doesn't look like JSON
-      unless msg.data.strip.start_with?('{')
-        Rails.logger.debug "[AssemblyAI] Non-JSON message: #{msg.data[0..50]}"
-        return
-      end
-      
-      data = JSON.parse(msg.data)
-      client.send(:handle, data)
-    rescue JSON::ParserError => e
-      Rails.logger.warn "[AssemblyAI] JSON parse error: #{e.message}, data: #{msg.data[0..100]}"
     end
 
     @ws.on :error do |e|
-      Rails.logger.error "[AssemblyAI] Error: #{e.message}"
+      Rails.logger.error "[AssemblyAI] WebSocket error: #{e.message}"
+      client.send(:handle_disconnect)
     end
 
     @ws.on :close do |e|
@@ -89,6 +117,20 @@ class AssemblyAiClient
         Rails.logger.info "[AssemblyAI] Connection closed: #{e.code} #{e.reason}"
       else
         Rails.logger.info "[AssemblyAI] Connection closed: #{e.class} #{e.message rescue nil}"
+      end
+      client.send(:handle_disconnect)
+    end
+  end
+
+  def handle_disconnect
+    return if @closed
+    @ws = nil
+    Rails.logger.warn "[AssemblyAI] Connection lost, notifying callbacks"
+
+    # Notify callbacks about disconnection
+    @mutex.synchronize do
+      @callbacks.each do |cb|
+        cb.call({ type: "error", message: "STT connection lost" }) rescue nil
       end
     end
   end
