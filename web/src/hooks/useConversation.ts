@@ -10,7 +10,7 @@ interface ConversationMessage {
 type SessionState = 'disconnected' | 'idle' | 'processing'
 
 interface ServerEvent {
-  type: 'stt_chunk' | 'stt_output' | 'llm_chunk' | 'llm_end' | 'tts_chunk' | 'error'
+  type: 'stt_chunk' | 'stt_output' | 'llm_chunk' | 'llm_end' | 'tts_chunk' | 'tts_end' | 'error'
   ts: number
   transcript?: string
   text?: string
@@ -78,7 +78,8 @@ export function useConversation(): UseConversationResult {
             },
           ])
         }
-        setState('idle')
+        // Keep processing state until TTS completes
+        // setState('idle') will be called after TTS finishes
         break
       }
       case 'tts_chunk':
@@ -87,6 +88,11 @@ export function useConversation(): UseConversationResult {
             new CustomEvent('tts_audio', { detail: data.audio })
           )
         }
+        break
+
+      case 'tts_end':
+        // TTS playback completed, return to idle state
+        setState('idle')
         break
 
       case 'error':

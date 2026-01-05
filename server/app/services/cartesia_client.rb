@@ -91,10 +91,22 @@ class CartesiaClient
   end
 
   def handle(data)
-    return unless data["data"]
-
-    @mutex.synchronize do
-      @callbacks.each { |cb| cb.call(type: "tts_chunk", audio: data["data"]) }
+    case data["type"]
+    when "chunk"
+      # Audio chunk data
+      if data["data"]
+        @mutex.synchronize do
+          @callbacks.each { |cb| cb.call(type: "tts_chunk", audio: data["data"]) }
+        end
+      end
+    when "done"
+      # TTS generation completed
+      Rails.logger.info "[Cartesia] TTS generation completed for context: #{data['context_id']}"
+      @mutex.synchronize do
+        @callbacks.each { |cb| cb.call(type: "tts_end") }
+      end
+    else
+      Rails.logger.debug "[Cartesia] Unknown message type: #{data['type']}"
     end
   end
 
