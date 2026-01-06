@@ -17,14 +17,8 @@ make docker-down  # 컨테이너 중지
 
 ## 접속정보
 
-### 1. 관리자 정보
-- **주소**: http://localhost:5173/admin
-
-### 2. 프론트 정보
-- **주소**: http://localhost:5173
-
-### 3. 백엔드 정보
-- **주소**: http://localhost:3000
+- **프론트엔드**: http://localhost:5173
+- **백엔드 API**: http://localhost:3000
 
 
 ## 음성 대화 기술 구조도
@@ -61,4 +55,9 @@ make docker-down  # 컨테이너 중지
 - STT: AssemblyAI v3
 - LLM: Google Gemini 2.5 Flash Lite
 - TTS: Cartesia sonic-3
-상업 API의 경우에는 메이저 중 latency, 가격 등의 이유로 선택하였고, 프론트와 백엔드 모두 오버헤드 최소화를 위해 가벼운 라이브러리를 사용했습니다.
+
+**실시간 대화 특징:**
+- Full-duplex 양방향 통신으로 자연스러운 대화 경험
+- AssemblyAI의 `format_turns` 기능으로 발화 종료 자동 감지
+- 사용자가 말하는 동안 AI 응답 중단(interrupt) 지원
+- 버튼 조작 없이 자동으로 대화 진행
