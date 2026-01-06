@@ -15,13 +15,6 @@ Rails.application.routes.draw do
         resources :memberships, only: [ :index ], controller: "user_memberships"
       end
 
-      # Admin APIs
-      namespace :admin do
-        resources :membership_types, only: [ :index, :show, :create, :update, :destroy ]
-        resources :users, only: [ :index, :show ] do
-          resources :memberships, only: [ :index, :create, :destroy ], controller: "user_memberships"
-        end
-      end
     end
   end
 end

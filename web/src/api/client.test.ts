@@ -68,66 +68,6 @@ describe('ApiClient', () => {
     })
   })
 
-  describe('adminGetUsers', () => {
-    it('fetches users with query params', async () => {
-      const mockResponse = { users: [], meta: { total: 0, page: 1, per_page: 20, total_pages: 0 } }
-      vi.mocked(global.fetch).mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      } as Response)
-
-      await apiClient.adminGetUsers({ q: 'test', page: 2, per_page: 10 })
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringMatching(/\/admin\/users\?.*q=test/),
-        expect.any(Object)
-      )
-    })
-  })
-
-  describe('adminCreateMembershipType', () => {
-    it('sends POST request with membership type data', async () => {
-      const newType = { name: 'New', features: ['학습'], duration_days: 30, price: 10000 }
-      const mockResponse = { id: 1, ...newType }
-      vi.mocked(global.fetch).mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      } as Response)
-
-      const result = await apiClient.adminCreateMembershipType(newType)
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/admin/membership_types'),
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ membership_type: newType }),
-        })
-      )
-      expect(result).toEqual(mockResponse)
-    })
-  })
-
-  describe('adminGrantMembership', () => {
-    it('sends POST request to grant membership', async () => {
-      const mockMembership = { id: 1, status: 'active' }
-      vi.mocked(global.fetch).mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockMembership),
-      } as Response)
-
-      const result = await apiClient.adminGrantMembership(1, 2)
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/admin/users/1/memberships'),
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ membership_type_id: 2 }),
-        })
-      )
-      expect(result).toEqual(mockMembership)
-    })
-  })
-
   describe('error handling', () => {
     it('throws error when response is not ok', async () => {
       vi.mocked(global.fetch).mockResolvedValue({

@@ -38,7 +38,7 @@ describe('HomePage', () => {
       renderWithoutAuth(<HomePage />)
 
       await waitFor(() => {
-        expect(screen.getByText('Ringle')).toBeInTheDocument()
+        expect(screen.getByText('AI 영어튜터')).toBeInTheDocument()
       })
       expect(screen.getByText('AI 튜터 기반 영어 학습 플랫폼')).toBeInTheDocument()
       expect(screen.getByPlaceholderText('user1@example.com')).toBeInTheDocument()

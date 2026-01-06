@@ -157,16 +157,6 @@ describe('MembershipsPage', () => {
       })
     })
 
-    it('has link to admin page', async () => {
-      vi.mocked(apiClient.getUserMemberships).mockResolvedValue([])
-
-      renderWithoutAuth(<MembershipsPage />)
-
-      await waitFor(() => {
-        expect(screen.getByRole('link', { name: '관리자 페이지로 이동' })).toBeInTheDocument()
-      })
-    })
-
     it('displays features for each membership type', async () => {
       vi.mocked(apiClient.getUserMemberships).mockResolvedValue([])
 

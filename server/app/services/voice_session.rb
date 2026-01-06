@@ -6,14 +6,24 @@ class VoiceSession
     @llm = nil
     @messages = []
     @current_transcript = ""
+    @mutex = Mutex.new
+    @processing = false
+    @tts_generation = 0
   end
 
   def start
     @tts = CartesiaClient.new
     @llm = LlmService.new
 
-    # Setup TTS event listeners
-    @tts.on_event { |event| send_event(event) }
+    # Setup TTS event listeners with generation tracking
+    @tts.on_event do |event|
+      # Add current TTS generation to event
+      event_with_gen = event.merge(tts_generation: @tts_generation)
+      send_event(event_with_gen)
+    end
+
+    # Connect STT persistently for full-duplex conversation
+    connect_stt
 
     # Send initial greeting
     send_initial_greeting
@@ -21,20 +31,26 @@ class VoiceSession
 
   def handle_message(data)
     if data.is_a?(Array) || data.encoding == Encoding::BINARY
-      ensure_stt_connected
+      # Binary audio data - send to STT
       @stt&.send_audio(data)
     else
       # JSON message
       begin
         msg = JSON.parse(data)
-        if msg["type"] == "end_of_speech"
-          handle_end_of_speech
-        elsif msg["type"] == "start_recording"
-          handle_start_recording
+        case msg["type"]
+        when "auto_end_of_speech"
+          handle_auto_end_of_speech
+        when "interrupt"
+          handle_interrupt
+        when "end_of_speech"
+          # Legacy support
+          handle_auto_end_of_speech
+        when "start_recording"
+          # No-op for persistent STT connection
+          Rails.logger.debug "[VoiceSession] start_recording event (no-op with persistent STT)"
         end
       rescue JSON::ParserError
         # Treat as binary if JSON parsing fails
-        ensure_stt_connected
         @stt&.send_audio(data)
       end
     end
@@ -49,10 +65,10 @@ class VoiceSession
 
   private
 
-  def ensure_stt_connected
+  def connect_stt
     return if @stt
 
-    Rails.logger.info "[VoiceSession] Connecting to STT"
+    Rails.logger.info "[VoiceSession] Connecting to STT (persistent)"
     @stt = AssemblyAiClient.new(sample_rate: 16000)
 
     # Setup STT event listeners
@@ -73,24 +89,51 @@ class VoiceSession
     @current_transcript = ""
   end
 
-  def handle_start_recording
-    # Reconnect STT when user starts recording
-    ensure_stt_connected
-    Rails.logger.info "[VoiceSession] Ready for recording"
-  end
+  def handle_auto_end_of_speech
+    # Prevent concurrent processing
+    return if @processing
 
-  def handle_end_of_speech
+    @mutex.synchronize do
+      return if @processing
+      @processing = true
+    end
+
     # Force STT to finalize current turn
     @stt&.force_endpoint
 
-    # Wait briefly for final transcript, then process and disconnect
+    # Wait briefly for final transcript, then process
     Thread.new do
-      sleep 0.5
-      process_llm(@current_transcript) if @current_transcript.present?
+      begin
+        sleep 0.5
 
-      # Disconnect STT after processing
-      disconnect_stt
+        transcript = @current_transcript
+        @current_transcript = ""
+
+        if transcript.present?
+          process_llm(transcript)
+        else
+          Rails.logger.warn "[VoiceSession] Empty transcript, skipping LLM processing"
+        end
+      ensure
+        @mutex.synchronize { @processing = false }
+      end
     end
+  end
+
+  def handle_interrupt
+    Rails.logger.info "[VoiceSession] Interrupt received, canceling TTS"
+
+    # Increment TTS generation to invalidate old chunks
+    @mutex.synchronize do
+      @tts_generation += 1
+      @processing = false
+    end
+
+    # Cancel current TTS generation
+    @tts&.cancel_current
+
+    # Send interrupted acknowledgment with new generation
+    send_event(type: "interrupted", tts_generation: @tts_generation)
   end
 
   def send_initial_greeting
@@ -133,6 +176,10 @@ class VoiceSession
 
     # Generate TTS for complete response
     if assistant_response.present?
+      # Increment TTS generation for new response (enables client-side buffering)
+      @mutex.synchronize { @tts_generation += 1 }
+      Rails.logger.info "[VoiceSession] Starting TTS generation #{@tts_generation}"
+
       @tts.send_text(assistant_response)
       Rails.logger.info "[VoiceSession] Sent complete response to TTS: #{assistant_response[0..50]}..."
     end

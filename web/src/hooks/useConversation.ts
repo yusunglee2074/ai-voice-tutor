@@ -7,15 +7,16 @@ interface ConversationMessage {
   timestamp: number
 }
 
-type SessionState = 'disconnected' | 'idle' | 'processing'
+type SessionState = 'disconnected' | 'listening' | 'processing' | 'speaking'
 
 interface ServerEvent {
-  type: 'stt_chunk' | 'stt_output' | 'llm_chunk' | 'llm_end' | 'tts_chunk' | 'tts_end' | 'error'
+  type: 'stt_chunk' | 'stt_output' | 'llm_chunk' | 'llm_end' | 'tts_chunk' | 'tts_end' | 'interrupted' | 'error'
   ts: number
   transcript?: string
   text?: string
   audio?: string
   message?: string
+  tts_generation?: number
 }
 
 interface UseConversationResult {
@@ -27,6 +28,8 @@ interface UseConversationResult {
   sendAudio: (audioData: ArrayBuffer) => void
   sendEndOfSpeech: () => void
   sendStartRecording: () => void
+  sendAutoEndOfSpeech: () => void
+  sendInterrupt: () => void
   error: string | null
 }
 
@@ -40,9 +43,11 @@ export function useConversation(): UseConversationResult {
   const wsRef = useRef<WebSocket | null>(null)
   const currentAssistantMessageRef = useRef('')
   const intentionalDisconnectRef = useRef(false)
+  const currentTtsGenerationRef = useRef(0)
 
   // Use ref to avoid stale closure in WebSocket callbacks
   const handleServerEventRef = useRef<(data: ServerEvent) => void>(() => { })
+  const sendAutoEndOfSpeechRef = useRef<(transcript?: string) => void>(() => { })
 
   handleServerEventRef.current = (data: ServerEvent) => {
     console.log('[WebSocket] Received event:', data.type, data)
@@ -55,8 +60,19 @@ export function useConversation(): UseConversationResult {
         break
 
       case 'stt_output':
+        // Final formatted transcript from AssemblyAI
+        // This indicates the user has finished speaking
         if (data.transcript) {
+          console.log('[WebSocket] STT output received, auto-triggering LLM')
+
+          // Display the transcript briefly
           setCurrentTranscript(data.transcript)
+
+          // Automatically trigger LLM response
+          // Use setTimeout to ensure React state updates complete
+          setTimeout(() => {
+            sendAutoEndOfSpeechRef.current(data.transcript)
+          }, 0)
         }
         break
 
@@ -80,26 +96,52 @@ export function useConversation(): UseConversationResult {
             },
           ])
         }
-        // Keep processing state until TTS completes
-        // setState('idle') will be called after TTS finishes
+        // Keep processing state until TTS starts
         break
       }
       case 'tts_chunk':
         if (data.audio) {
+          // Check if this chunk is from the current generation
+          const chunkGeneration = data.tts_generation ?? 0
+          if (chunkGeneration < currentTtsGenerationRef.current) {
+            console.log('[WebSocket] Ignoring old TTS chunk, generation:', chunkGeneration, 'current:', currentTtsGenerationRef.current)
+            return
+          }
+
+          // First TTS chunk - transition to speaking state
+          setState('speaking')
           window.dispatchEvent(
-            new CustomEvent('tts_audio', { detail: data.audio })
+            new CustomEvent('tts_audio', {
+              detail: {
+                audio: data.audio,
+                generation: chunkGeneration
+              }
+            })
           )
         }
         break
 
       case 'tts_end':
-        // TTS playback completed, return to idle state
-        setState('idle')
+        // TTS playback completed, return to listening state
+        setState('listening')
+        break
+
+      case 'interrupted':
+        // Interruption acknowledged by server
+        console.log('[WebSocket] Interruption acknowledged')
+
+        // Update current generation to filter out old chunks
+        if (data.tts_generation !== undefined) {
+          currentTtsGenerationRef.current = data.tts_generation
+          console.log('[WebSocket] Updated TTS generation to:', data.tts_generation)
+        }
+
+        setState('listening')
         break
 
       case 'error':
         setError(data.message || 'Unknown error')
-        setState('idle')
+        setState('listening')
         break
 
       default:
@@ -125,7 +167,7 @@ export function useConversation(): UseConversationResult {
 
       ws.onopen = () => {
         console.log('[WebSocket] Connected to /ws')
-        setState('idle')
+        setState('listening')
         setError(null)
       }
 
@@ -220,6 +262,52 @@ export function useConversation(): UseConversationResult {
     console.log('[WebSocket] Sent start_recording event')
   }, [])
 
+  const sendAutoEndOfSpeech = useCallback((transcript?: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('[WebSocket] Cannot send auto_end_of_speech: not connected')
+      return
+    }
+
+    // Use provided transcript or current transcript from state
+    const finalTranscript = transcript || currentTranscript
+
+    // Send JSON message
+    wsRef.current.send(JSON.stringify({ type: 'auto_end_of_speech' }))
+    console.log('[WebSocket] Sent auto_end_of_speech event')
+
+    // Add user message to conversation
+    if (finalTranscript) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'user',
+          content: finalTranscript,
+          timestamp: Date.now(),
+        },
+      ])
+      setCurrentTranscript('')
+    }
+
+    setState('processing')
+  }, [currentTranscript])
+
+  // Keep ref updated to avoid stale closures
+  sendAutoEndOfSpeechRef.current = sendAutoEndOfSpeech
+
+  const sendInterrupt = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('[WebSocket] Cannot send interrupt: not connected')
+      return
+    }
+
+    // Send JSON message to interrupt TTS
+    wsRef.current.send(JSON.stringify({ type: 'interrupt' }))
+    console.log('[WebSocket] Sent interrupt event')
+
+    // Clear current assistant message being generated
+    currentAssistantMessageRef.current = ''
+  }, [])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -242,6 +330,8 @@ export function useConversation(): UseConversationResult {
     sendAudio,
     sendEndOfSpeech,
     sendStartRecording,
+    sendAutoEndOfSpeech,
+    sendInterrupt,
     error,
   }
 }

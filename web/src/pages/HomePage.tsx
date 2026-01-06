@@ -45,7 +45,7 @@ export default function HomePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-          <h1 className="text-3xl font-bold text-center mb-2">Ringle</h1>
+          <h1 className="text-3xl font-bold text-center mb-2">AI 영어튜터</h1>
           <p className="text-gray-600 text-center mb-8">AI 튜터 기반 영어 학습 플랫폼</p>
 
           <form onSubmit={handleLogin} className="space-y-4">
@@ -92,7 +92,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-blue-600">Ringle</h1>
+          <h1 className="text-2xl font-bold text-blue-600">AI 영어튜터</h1>
           <div className="flex items-center gap-4">
             <span className="text-gray-700">{user.name}</span>
             <button

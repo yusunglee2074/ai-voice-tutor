@@ -14,6 +14,7 @@ class CartesiaClient
     @connected = false
     @connection_cv = ConditionVariable.new
     @connection_mutex = Mutex.new
+    @current_context_id = nil
     connect
   end
 
@@ -30,11 +31,17 @@ class CartesiaClient
     return if text.blank?
 
     @context_counter += 1
+    context_id = "ctx_#{(Time.now.to_f * 1000).to_i}_#{@context_counter}"
+
+    @mutex.synchronize do
+      @current_context_id = context_id
+    end
+
     message = {
       model_id: MODEL,
       transcript: text,
       voice: { mode: "id", id: VOICE_ID },
-      context_id: "ctx_#{(Time.now.to_f * 1000).to_i}_#{@context_counter}",
+      context_id: context_id,
       output_format: {
         container: "raw",
         encoding: "pcm_s16le",
@@ -45,6 +52,28 @@ class CartesiaClient
 
     @ws.send(message)
     Rails.logger.debug "[Cartesia] Sent text: #{text[0..50]}..."
+  end
+
+  def cancel_current
+    context_id = nil
+    @mutex.synchronize do
+      context_id = @current_context_id
+      @current_context_id = nil
+    end
+
+    return unless context_id
+    return unless @ws&.open?
+
+    # Send cancel message to Cartesia
+    cancel_message = {
+      context_id: context_id,
+      cancel: true
+    }.to_json
+
+    @ws.send(cancel_message)
+    Rails.logger.info "[Cartesia] Cancelled context: #{context_id}"
+  rescue => e
+    Rails.logger.error "[Cartesia] Error cancelling: #{e.message}"
   end
 
   def on_event(&block)

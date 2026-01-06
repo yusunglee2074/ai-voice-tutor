@@ -48,7 +48,7 @@ export default function MembershipsPage() {
       <nav className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <Link to="/" className="text-2xl font-bold text-blue-600">
-            Ringle
+            AI 영어튜터
           </Link>
           <div className="flex items-center gap-4">
             <span className="text-gray-700">{user.name}</span>
@@ -154,9 +154,7 @@ export default function MembershipsPage() {
 
                 <button
                   onClick={() =>
-                    alert(
-                      '실제 결제 기능은 구현되지 않았습니다.\n관리자 페이지에서 멤버십을 부여할 수 있습니다.'
-                    )
+                    alert('실제 결제 기능은 구현되지 않았습니다.')
                   }
                   className="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
                 >
@@ -172,22 +170,9 @@ export default function MembershipsPage() {
           <h3 className="text-lg font-semibold mb-3">💡 안내사항</h3>
           <ul className="space-y-2 text-gray-700">
             <li>• 실제 결제 기능은 구현되지 않았습니다.</li>
-            <li>
-              • 테스트를 위해 관리자 페이지(/admin)에서 멤버십을 부여할 수 있습니다.
-            </li>
             <li>• 멤버십은 유효기간이 지나면 자동으로 만료됩니다.</li>
             <li>• 여러 멤버십을 동시에 보유할 수 있습니다.</li>
           </ul>
-        </div>
-
-        {/* Admin Link */}
-        <div className="mt-6 text-center">
-          <Link
-            to="/admin"
-            className="text-blue-600 hover:text-blue-800 text-sm underline"
-          >
-            관리자 페이지로 이동
-          </Link>
         </div>
       </div>
     </div>

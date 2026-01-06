@@ -10,9 +10,17 @@ interface AudioCaptureHookResult {
 
 interface AudioCaptureHookProps {
   onAudioData: (audioData: ArrayBuffer) => void
+  onSilenceDetected?: () => void
+  onSpeechDetected?: () => void
+  silenceTimeoutMs?: number
 }
 
-export function useAudioCapture({ onAudioData }: AudioCaptureHookProps): AudioCaptureHookResult {
+export function useAudioCapture({
+  onAudioData,
+  onSilenceDetected,
+  onSpeechDetected,
+  silenceTimeoutMs = 1000
+}: AudioCaptureHookProps): AudioCaptureHookResult {
   const [isRecording, setIsRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [audioLevel, setAudioLevel] = useState(0)
@@ -23,6 +31,16 @@ export function useAudioCapture({ onAudioData }: AudioCaptureHookProps): AudioCa
   const streamRef = useRef<MediaStream | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const isRecordingRef = useRef(false)
+  const lastAudioTimestampRef = useRef<number>(0)
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const onSilenceDetectedRef = useRef(onSilenceDetected)
+  const onSpeechDetectedRef = useRef(onSpeechDetected)
+
+  // Keep callback refs fresh
+  useEffect(() => {
+    onSilenceDetectedRef.current = onSilenceDetected
+    onSpeechDetectedRef.current = onSpeechDetected
+  }, [onSilenceDetected, onSpeechDetected])
 
   const updateAudioLevel = useCallback(() => {
     if (!analyserRef.current) return
@@ -89,8 +107,8 @@ export function useAudioCapture({ onAudioData }: AudioCaptureHookProps): AudioCa
 
           // Check if audio is silent (max amplitude below threshold)
           // 16-bit PCM range: -32768 to 32767
-          // Threshold 10 is very conservative (0.03% of max)
-          const SILENCE_THRESHOLD = 10
+          const SILENCE_THRESHOLD = 200 // For silence detection (not used currently)
+          const SPEECH_THRESHOLD = 500 // High threshold for barge-in detection
           let maxLevel = 0
           for (let i = 0; i < samples.length; i++) {
             const absValue = Math.abs(samples[i])
@@ -99,9 +117,40 @@ export function useAudioCapture({ onAudioData }: AudioCaptureHookProps): AudioCa
             }
           }
 
+          // Log audio levels for debugging (only when above threshold)
+          if (maxLevel > SPEECH_THRESHOLD) {
+            console.log('[AudioCapture] High audio level detected:', maxLevel, 'threshold:', SPEECH_THRESHOLD)
+          }
+
           if (maxLevel < SILENCE_THRESHOLD) {
+            // Silent audio - start/continue silence timer
+            if (silenceTimerRef.current === null && lastAudioTimestampRef.current > 0) {
+              // Start silence timer
+              console.log('[AudioCapture] Starting silence timer, level:', maxLevel)
+              silenceTimerRef.current = setTimeout(() => {
+                console.log('[AudioCapture] Silence detected after', silenceTimeoutMs, 'ms')
+                onSilenceDetectedRef.current?.()
+                silenceTimerRef.current = null
+              }, silenceTimeoutMs)
+            }
             // Skip sending silent audio to reduce server traffic
             return
+          }
+
+          // Speech detected
+          const now = Date.now()
+          const hadPreviousAudio = lastAudioTimestampRef.current > 0
+          lastAudioTimestampRef.current = now
+
+          // Clear silence timer if it exists
+          if (silenceTimerRef.current !== null) {
+            clearTimeout(silenceTimerRef.current)
+            silenceTimerRef.current = null
+          }
+
+          // Trigger speech detection callback for barge-in (only if above higher threshold)
+          if (maxLevel >= SPEECH_THRESHOLD && hadPreviousAudio) {
+            onSpeechDetectedRef.current?.()
           }
 
           console.log('[AudioCapture] Sending audio data:', audioBuffer.byteLength, 'bytes, level:', maxLevel)
@@ -141,6 +190,15 @@ export function useAudioCapture({ onAudioData }: AudioCaptureHookProps): AudioCa
       cancelAnimationFrame(animationFrameRef.current)
       animationFrameRef.current = null
     }
+
+    // Clear silence timer
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
+    }
+
+    // Reset audio timestamp
+    lastAudioTimestampRef.current = 0
 
     // Stop all tracks
     if (streamRef.current) {

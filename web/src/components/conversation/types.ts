@@ -4,4 +4,4 @@ export interface ConversationMessage {
   timestamp: number
 }
 
-export type SessionState = 'disconnected' | 'idle' | 'processing'
+export type SessionState = 'disconnected' | 'listening' | 'processing' | 'speaking'
