@@ -32,7 +32,7 @@ export function useAudioCapture({
   const animationFrameRef = useRef<number | null>(null)
   const isRecordingRef = useRef(false)
   const lastAudioTimestampRef = useRef<number>(0)
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onSilenceDetectedRef = useRef(onSilenceDetected)
   const onSpeechDetectedRef = useRef(onSpeechDetected)
 
